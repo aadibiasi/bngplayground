@@ -9,7 +9,15 @@ import { parseBNGL } from '../services/parseBNGL';
 /**
  * Normalize BNG2 species through Web parser and trace missing species origins
  */
-describe('Species Normalization and Tracing', () => {
+
+// Skip these tests if the precomputed BNG2 output files aren't available on CI
+const webSpeciesPath = path.join(__dirname, '..', 'species_comparison_output', 'web_species.txt');
+const bng2SpeciesPath = path.join(__dirname, '..', 'species_comparison_output', 'bng2_species_clean.txt');
+const hasNormalizationData = fs.existsSync(webSpeciesPath) && fs.existsSync(bng2SpeciesPath);
+
+const maybeDescribe = hasNormalizationData ? describe : describe.skip;
+
+maybeDescribe('Species Normalization and Tracing', () => {
   const modelPath = path.join(__dirname, '..', 'published-models', 'cell-regulation', 'Barua_2013.bngl');
   const outputDir = path.join(__dirname, '..', 'species_comparison_output');
 

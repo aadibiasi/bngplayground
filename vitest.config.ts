@@ -45,6 +45,8 @@ export default defineConfig({
       'tests/webgpu-solver.spec.ts',
       'tests/regulatoryTab.spec.tsx',
       'tests/constants.spec.ts',
+      // diagnostic benchmarks are slow and not part of the fast suite
+      'src/diagnostic_benchmark.test.ts',
       'tests/diagnostic_feature_flags.spec.ts',
       'tests/functionalRatesSecurity.spec.ts',
       'tests/parser/ExpressionEvaluation.test.ts',

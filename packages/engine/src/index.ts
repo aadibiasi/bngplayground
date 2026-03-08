@@ -65,7 +65,7 @@ export { countPatternMatches, isSpeciesMatch, isFunctionalRateExpr, removeCompar
 // ── Analysis ───────────────────────────────────────────────────────
 export { buildStoichiometricMatrix, computeLeftNullSpace, findConservationLaws, createReducedSystem } from './services/analysis/ConservationLaws';
 export type { ConservationLaw, ConservationAnalysis } from './services/analysis/ConservationLaws';
-export { computeJacobianSparsity, buildJacobianContributions } from './services/analysis/SparseJacobian';
+export { computeJacobianSparsity, buildJacobianContributions, generateSparseJacobianFunction } from './services/analysis/SparseJacobian';
 export { SparseODESolver } from './services/analysis/SparseODESolver';
 export { denseToCSR, ilu0Factorize, forwardSolve, backwardSolve, sparseSolve, csrMatVec, gmres } from './services/analysis/SparseLUSolver';
 export type { CSRMatrix } from './services/analysis/SparseLUSolver';

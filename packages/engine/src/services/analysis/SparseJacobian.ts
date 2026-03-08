@@ -261,3 +261,18 @@ export function generateAnalyticalJacobian(
     return (y: Float64Array, data: Float64Array) => { data.fill(0); };
   }
 }
+
+// Legacy alias kept for backward compatibility with older tests and APIs.
+// The earlier implementation required the precomputed `contributions` array,
+// but the modern `generateAnalyticalJacobian` recomputes what it needs and
+// ignores the extra argument. We still accept `contributions` here so that
+// existing callers (like tests) don't need to be modified immediately.
+export function generateSparseJacobianFunction(
+  reactions: Rxn[],
+  nSpecies: number,
+  sparsity: SparseJacobianInfo,
+  contributions: ReactionContribution[][]
+): (y: Float64Array, data: Float64Array) => void {
+  // contributions parameter is unused; kept for compatibility
+  return generateAnalyticalJacobian(reactions, nSpecies, sparsity);
+}
