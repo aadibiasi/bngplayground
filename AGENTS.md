@@ -170,14 +170,13 @@ The codebase uses a **monorepo structure** with core engine code in `packages/en
 - `packages/engine/src/utils/` - Utility functions for core algorithms
 - `packages/engine/src/interfaces/` - Engine interfaces
 
-**src/ Directory (Legacy - Being Migrated):**
-- Some files remain in `src/`. Most files in `src/services/`, `src/parser/`, and `src/utils/` are currently **shims** re-exporting from `@bngplayground/engine`.
+**src/ Directory (Legacy):**
+- Remaining files in `src/` have genuine browser or framework dependencies (TF.js, WebGPU, Web Workers, DOM APIs) that prevent engine migration. `src/parser/` has been deleted — the canonical parser is in `packages/engine/src/parser/`.
 
-### Shim Elimination Plan
-**CRITICAL FOR AGENTS:** We are actively eliminating shims.
+### Shim Elimination - COMPLETE
+All shim files have been eliminated. Every consumer now imports directly from `@bngplayground/engine`.
 - Do **not** create new shims in `services/` or `src/services/`.
 - If you need a core capability, import it directly from `@bngplayground/engine`.
-- Files in `src/` and `services/` that are 1-line re-exports of engine functions are shims to be deleted after their consumers are updated.
 
 ### File Structure Overview
 

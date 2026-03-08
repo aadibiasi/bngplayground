@@ -10,10 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 
-import { parseBNGLStrict } from './parser/BNGLParserWrapper';
-import { NetworkGenerator } from './services/graph/NetworkGenerator';
-import { NautyService } from './services/graph/core/NautyService';
-import { BNGLParser } from './services/graph/core/BNGLParser';
+import { parseBNGLStrict, NetworkGenerator, NautyService, BNGLParser } from '@bngplayground/engine';
 
 interface BenchmarkResult {
     model: string;

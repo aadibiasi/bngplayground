@@ -224,4 +224,6 @@ rulebender-RuleBender-2.3.2
 public_models_compatibility.json
 public_atomizer_report.json
 
+.serena/
+
 # End of .gitignore

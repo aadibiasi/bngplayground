@@ -21,7 +21,14 @@ if (typeof exports === 'object' && typeof module === 'object') {
 } else if (typeof define === 'function' && define['amd'])
   define([], () => createCVodeModule);
 
-// ESM default export so this file can be statically/dynamically imported as an ES module.
-// The CJS/AMD blocks above only execute when `module`/`define` are present (e.g., Node.js);
-// in an ESM browser context they are unreachable, so this export is the sole export.
+// Universal module export pattern - CJS for Node.js, globalThis for browsers
+// Use try-catch to handle Vitest's ESM environment where module.exports may be read-only
+try {
+    if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
+        module.exports = createCVodeModule;
+    }
+} catch (e) {
+    // Ignore - ESM export below will be used
+}
+// ESM export for browsers using Vite/bundlers and Vitest
 export default createCVodeModule;

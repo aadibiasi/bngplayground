@@ -18,7 +18,7 @@ import {
   computeDefaultBounds,
   generateRange,
   formatNumber,
-} from '../../src/services/analysis/ParameterScan';
+} from '@bngplayground/engine';
 
 interface ParameterScanTabProps {
   model: BNGLModel | null;

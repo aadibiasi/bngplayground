@@ -20,6 +20,7 @@ import { clearAllEvaluatorCaches, evaluateFunctionalRate, evaluateExpressionOrPa
 import { analyzeModelStiffness, getOptimalCVODEConfig, detectModelPreset } from './cvodeStiffConfig';
 import { getFeatureFlags } from '../../featureFlags';
 import { jitCompiler } from '../analysis/JITCompiler';
+import { createReducedSystem, findConservationLaws } from '../analysis/ConservationLaws';
 import { SeededRandom } from '../../utils/random';
 // import * as fs from 'node:fs';
 
@@ -874,9 +875,8 @@ export async function simulate(
                 for (let k = 0; k < numSpecies; k++) {
                   state[k] = initialSeedConcentrations[k]; // SSA uses raw counts
                 }
-                console.log(`[Worker] SSA: Reset concentrations to initial seed species (no saved state)`);
               } else {
-                console.warn(`[Worker] SSA: resetConcentrations label "${label}" not found in cache`);
+                // No-op, as per BNG2 behavior
               }
             }
             continue;
@@ -1637,7 +1637,10 @@ export async function simulate(
       nonlinConvCoef: options.nonlinConvCoef ?? ((useAdaptiveCvodeTuning || usePresetCvodeTuning) ? stiffConfig.nonlinConvCoef : 0.1),
       maxErrTestFails: options.maxErrTestFails ?? ((useAdaptiveCvodeTuning || usePresetCvodeTuning) ? stiffConfig.maxErrTestFails : 7),
       maxConvFails: options.maxConvFails ?? ((useAdaptiveCvodeTuning || usePresetCvodeTuning) ? stiffConfig.maxConvFails : 10),
-      useAdams: options.useAdams ?? ((useAdaptiveCvodeTuning || usePresetCvodeTuning) ? stiffConfig.useAdams : false)
+      useAdams: options.useAdams ?? ((useAdaptiveCvodeTuning || usePresetCvodeTuning) ? stiffConfig.useAdams : false),
+      reactions: concreteReactions,
+      speciesNames: speciesHeaders,
+      parameters: new Map(Object.entries(model.parameters || {}))
     };
 
     const observableNamesSet = new Set((model.observables || []).map((o) => o.name));
@@ -1790,7 +1793,12 @@ export async function simulate(
       }
     }
 
-    if (jacobianColMajor && solverType === 'cvode_jac') solverOptions.jacobian = jacobianColMajor;
+    if (jacobianColMajor) {
+      if (solverType === 'cvode' || solverType === 'cvode_jac') {
+        solverOptions.solver = 'cvode_jac';
+        solverOptions.jacobian = jacobianColMajor;
+      }
+    }
     if (jacobianRowMajor && ['rosenbrock23', 'auto', 'cvode_auto'].includes(solverType)) solverOptions.jacobianRowMajor = jacobianRowMajor;
 
     // Try generating bytecode for native path
@@ -1932,6 +1940,7 @@ export async function simulate(
     // ODE Loop
     const odeStart = performance.now();
     const y = new Float64Array(state);
+    const conservationLawReductionEnabled = getFeatureFlags().conservationLawReduction;
     let modelTime = 0;
     let shouldStop: boolean;
 
@@ -2125,13 +2134,59 @@ export async function simulate(
 
       const phaseAtol = phase.atol ?? userAtol;
       const phaseRtol = phase.rtol ?? userRtol;
-      let currentSolverType = solverType;
-      if (phase.sparse === true) currentSolverType = 'cvode_sparse';
-      else if (phase.sparse === false && currentSolverType === 'cvode_sparse') currentSolverType = 'cvode';
+      
+      const phaseSolverOptions = { ...solverOptions, atol: phaseAtol, rtol: phaseRtol, solver: solverType };
 
-      const phaseSolverOptions = { ...solverOptions, atol: phaseAtol, rtol: phaseRtol, solver: currentSolverType };
+      let currentSolverType = solverType;
+      // Upgrade logic: prefer analytical dense over sparse-finite-differences for small networks
+      if (phase.sparse === true) {
+        if (numSpecies <= 500 && phaseSolverOptions.jacobian) {
+          currentSolverType = 'cvode_jac';
+        } else {
+          currentSolverType = 'cvode_sparse';
+        }
+      } else if (phase.sparse === false && (currentSolverType === 'cvode_sparse' || currentSolverType === 'cvode_jac')) {
+        currentSolverType = phaseSolverOptions.jacobian ? 'cvode_jac' : 'cvode';
+      } else if (currentSolverType === 'cvode' && phaseSolverOptions.jacobian) {
+        currentSolverType = 'cvode_jac';
+      }
+
+      let phaseDerivatives = derivatives;
+      let phaseState: Float64Array<ArrayBufferLike> = y;
+      let phaseExpandState: ((y_r: Float64Array) => Float64Array) | undefined;
+      let phaseReductionKey = 'full';
+
+      if (conservationLawReductionEnabled && currentSolverType !== 'sparse' && currentSolverType !== 'sparse_implicit') {
+        const conservation = findConservationLaws(concreteReactions as any, numSpecies, y, speciesHeaders);
+        if (conservation.laws.length > 0 && conservation.independentSpecies.length > 0 && conservation.independentSpecies.length < numSpecies) {
+          const reducedSystem = createReducedSystem(conservation, numSpecies);
+          phaseDerivatives = reducedSystem.transformDerivatives(derivatives);
+          phaseState = reducedSystem.reduce(y);
+          phaseExpandState = reducedSystem.expand;
+          phaseReductionKey = `reduced:${conservation.dependentSpecies.join(',')}`;
+
+          delete phaseSolverOptions.networkByteCode;
+          delete phaseSolverOptions.jacobian;
+          delete phaseSolverOptions.jacobianRowMajor;
+
+          if (phaseSolverOptions.rootFunction && phaseSolverOptions.numRoots) {
+            const fullRootFunction = phaseSolverOptions.rootFunction as (t: number, yCurrent: Float64Array, gout: Float64Array) => void;
+            phaseSolverOptions.rootFunction = (t: number, yReduced: Float64Array, gout: Float64Array) => {
+              fullRootFunction(t, reducedSystem.expand(yReduced), gout);
+            };
+          }
+
+          if (currentSolverType === 'cvode_jac') {
+            currentSolverType = 'cvode';
+          }
+
+          console.log(`[SimulationLoop] Using conservation-law reduced ODE system for phase ${phaseIdx}: ${numSpecies} -> ${reducedSystem.reducedSize}`);
+        }
+      }
+      
+      phaseSolverOptions.solver = currentSolverType;
       // Key used to detect whether a persisted solver is compatible with this phase.
-      const thisSolverKey = `${phaseAtol}:${phaseRtol}:${currentSolverType}`;
+      const thisSolverKey = `${phaseAtol}:${phaseRtol}:${currentSolverType}:${phaseReductionKey}`;
 
       // Reuse the persisted CVODE instance for continue=>1 phases when solver config matches.
       // This preserves CVODE's internal BDF history (step sizes, order) across phase boundaries,
@@ -2148,11 +2203,9 @@ export async function simulate(
           persistedSolver = undefined;
         }
         try {
-          console.log(`[Worker Debug] About to create solver: ${JSON.stringify(phaseSolverOptions)}`);
-          solver = await createSolver(numSpecies, derivatives, phaseSolverOptions);
-          console.log('[Worker Debug] Solver created successfully');
+          solver = await createSolver(phaseState.length, phaseDerivatives, phaseSolverOptions);
         } catch (err) {
-          console.error('[Worker Debug] Failed to create solver:', err);
+          console.error('[Worker] Failed to create solver:', err);
           throw err;
         }
       }
@@ -2175,10 +2228,11 @@ export async function simulate(
 
       try {
         if (VERBOSE_SIM_DEBUG) console.log(`[DEBUG_TRACE] Starting loop for Phase ${phaseIdx}, steps=${phase_n_steps}, record=${recordThisPhase}`);
+        let solverState = phaseState;
         for (let i = 1; i <= phase_n_steps && !shouldStop; i++) {
           callbacks.checkCancelled();
           const tTarget = phaseStart + (phaseDuration * i) / phase_n_steps;
-          const result = solver.integrate(y, t, tTarget, callbacks.checkCancelled);
+          const result = solver.integrate(solverState, t, tTarget, callbacks.checkCancelled);
 
           if (VERBOSE_SIM_DEBUG) console.log(`[DEBUG_TRACE] Step ${i} done. t=${result.t}, success=${result.success}`);
 
@@ -2191,7 +2245,14 @@ export async function simulate(
             solverError = true;
             break;
           }
-          y.set(result.y);
+
+          if (phaseExpandState) {
+            solverState = result.y;
+            y.set(phaseExpandState(solverState));
+          } else {
+            y.set(result.y);
+            solverState = y;
+          }
           t = result.t;
 
           if (result.errorMessage === "ROOT_FOUND") {

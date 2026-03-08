@@ -17,7 +17,7 @@ import {
   sparseSolve,
   gmres
 } from './SparseLUSolver';
-import { computeJacobianSparsity, type SparseJacobianInfo } from './SparseJacobian';
+import { computeJacobianSparsity, type SparseJacobianInfo, generateAnalyticalJacobian } from './SparseJacobian';
 import {
   findConservationLaws,
   createReducedSystem,
@@ -37,6 +37,7 @@ export interface SparseODEOptions {
   gmresMaxIter: number;
   numRoots?: number;
   rootFunction?: (t: number, y: Float64Array, gout: Float64Array) => void;
+  parameters?: Map<string, number>;
 }
 
 const DEFAULT_OPTIONS: SparseODEOptions = {
@@ -61,10 +62,10 @@ export class SparseODESolver {
   // Derivative function
   private derivatives: (y: Float64Array, dydt: Float64Array) => void;
 
-  // Sparse Jacobian info
   private sparsity?: SparseJacobianInfo;
   private jacobianData?: Float64Array;
   private jacobianCSR?: CSRMatrix;
+  private jacobianEvaluator?: (y: Float64Array, J: Float64Array) => void;
   private iluFactors?: ILU0Factors;
 
   // Conservation law system reduction
@@ -117,6 +118,18 @@ export class SparseODESolver {
     if (reactions.length > 0) {
       this.sparsity = computeJacobianSparsity(reactions, this.nFull);
       this.jacobianData = new Float64Array(this.sparsity.nnz);
+
+      // Initialize analytical Jacobian if possible
+      try {
+        const params: Record<string, number> = {};
+        if (options.parameters) {
+          options.parameters.forEach((v, k) => { params[k] = v; });
+        }
+        this.jacobianEvaluator = generateAnalyticalJacobian(reactions, this.nFull, this.sparsity, params);
+        console.log('[SparseODE] Using analytical JIT-compiled Jacobian');
+      } catch (e) {
+        console.warn('[SparseODE] Failed to generate analytical Jacobian, will use finite differences', e);
+      }
     }
 
     // Allocate work arrays
@@ -132,36 +145,38 @@ export class SparseODESolver {
     }
   }
 
-  /**
-   * Compute Jacobian at current state using finite differences
-   * (Could be replaced with analytical Jacobian for mass-action)
-   */
   private computeJacobian(y: Float64Array): void {
     if (!this.sparsity || !this.jacobianData) return;
 
-    const n = this.n;
-    const deriv = this.reducedDerivatives || this.derivatives;
-    const eps = 1e-8;
+    if (this.jacobianEvaluator) {
+      // Use analytical Jacobian (much faster)
+      this.jacobianEvaluator(y, this.jacobianData);
+    } else {
+      // Fallback: finite differences
+      const n = this.n;
+      const deriv = this.reducedDerivatives || this.derivatives;
+      const eps = 1e-8;
 
-    // Base function evaluation
-    deriv(y, this.f0);
+      // Base function evaluation
+      deriv(y, this.f0);
 
-    // For each column j, perturb y[j] and compute column of Jacobian
-    for (let j = 0; j < n; j++) {
-      const h = eps * (Math.abs(y[j]) + 1);
-      const yj = y[j];
+      // For each column j, perturb y[j] and compute column of Jacobian
+      for (let j = 0; j < n; j++) {
+        const h = eps * (Math.abs(y[j]) + 1);
+        const yj = y[j];
 
-      this.yTemp.set(y);
-      this.yTemp[j] = yj + h;
-      deriv(this.yTemp, this.f1);
+        this.yTemp.set(y);
+        this.yTemp[j] = yj + h;
+        deriv(this.yTemp, this.f1);
 
-      // Fill in sparse entries for column j
-      for (let i = 0; i < n; i++) {
-        // Find entry (i,j) in CSR format
-        for (let p = this.sparsity.rowPtr[i]; p < this.sparsity.rowPtr[i + 1]; p++) {
-          if (this.sparsity.colIdx[p] === j) {
-            this.jacobianData[p] = (this.f1[i] - this.f0[i]) / h;
-            break;
+        // Fill in sparse entries for column j
+        for (let i = 0; i < n; i++) {
+          // Find entry (i,j) in CSR format
+          for (let p = this.sparsity.rowPtr[i]; p < this.sparsity.rowPtr[i + 1]; p++) {
+            if (this.sparsity.colIdx[p] === j) {
+              this.jacobianData[p] = (this.f1[i] - this.f0[i]) / h;
+              break;
+            }
           }
         }
       }
@@ -336,10 +351,10 @@ export class SparseODESolver {
       const g1 = this.g1;
       const tStart = _t;
       const tEnd = _t + h;
-      
+
       this.options.rootFunction(tStart, y, g0);
       this.options.rootFunction(tEnd, this.yNew, g1);
-      
+
       let rootFound = false;
       for (let i = 0; i < this.options.numRoots; i++) {
         // Check for sign change
@@ -348,7 +363,7 @@ export class SparseODESolver {
           break;
         }
       }
-      
+
       if (rootFound) {
         // Signal root found. Solver will return this state and SimulationLoop can re-evaluate conditions.
         return { accepted: true, hNew: h, yNew: this.yNew, errNorm, rootFound: true } as any;
@@ -367,7 +382,7 @@ export class SparseODESolver {
     tEnd: number,
     outputTimes: number[],
     output: (t: number, y: Float64Array) => void
-  ): { success: boolean; steps: number } {
+  ): { success: boolean; steps: number; y: Float64Array; t: number } {
 
 
     // Get initial state (reduced if conservation laws used)
@@ -435,15 +450,18 @@ export class SparseODESolver {
       const minH = (tEnd - t0) * 1e-15;
       if (h < minH) {
         console.error(`[SparseODE] Step size too small at t=${t}`);
-        return { success: false, steps };
+        const finalY = this.reducedSystem ? this.reducedSystem.expand(y) : new Float64Array(y);
+        return { success: false, steps, y: finalY, t };
       }
     }
 
+    const finalY = this.reducedSystem ? this.reducedSystem.expand(y) : new Float64Array(y);
+
     if (steps >= this.options.maxSteps) {
       console.warn(`[SparseODE] Max steps reached at t=${t}`);
-      return { success: false, steps };
+      return { success: false, steps, y: finalY, t };
     }
 
-    return { success: true, steps };
+    return { success: true, steps, y: finalY, t };
   }
 }

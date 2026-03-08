@@ -65,13 +65,16 @@ export { countPatternMatches, isSpeciesMatch, isFunctionalRateExpr, removeCompar
 // ── Analysis ───────────────────────────────────────────────────────
 export { buildStoichiometricMatrix, computeLeftNullSpace, findConservationLaws, createReducedSystem } from './services/analysis/ConservationLaws';
 export type { ConservationLaw, ConservationAnalysis } from './services/analysis/ConservationLaws';
-export { computeJacobianSparsity, buildJacobianContributions, generateSparseJacobianFunction } from './services/analysis/SparseJacobian';
+export { computeJacobianSparsity, buildJacobianContributions } from './services/analysis/SparseJacobian';
 export { SparseODESolver } from './services/analysis/SparseODESolver';
 export { denseToCSR, ilu0Factorize, forwardSolve, backwardSolve, sparseSolve, csrMatVec, gmres } from './services/analysis/SparseLUSolver';
 export type { CSRMatrix } from './services/analysis/SparseLUSolver';
 export { JITCompiler, jitCompiler } from './services/analysis/JITCompiler';
 export { analyzeNetwork, checkDeficiencyZeroTheorem } from './services/analysis/NetworkAnalysis';
 export type { NetworkAnalysis } from './services/analysis/NetworkAnalysis';
+export { roundForInput, DEFAULT_ZERO_DELTA, formatNumber, computeDefaultBounds, generateRange, validateScanSettings } from './services/analysis/ParameterScan';
+export { fitParameters } from './services/analysis/paramFitter';
+export type { FitAlgorithm, ParamBounds, FitProgress, FitResult, FitConfig, ExperimentalDataPoint } from './services/analysis/paramFitter';
 
 // ── Utils ───────────────────────────────────────────────────────────
 export { SafeExpressionEvaluator } from './utils/safeExpressionEvaluator';
@@ -82,6 +85,14 @@ export { formatBNGL } from './utils/formatBNGL';
 export { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from './utils/paramUtils';
 export { parseObservablePattern, computeObservableValue, computeDynamicObservable, validateObservablePattern } from './utils/dynamicObservable';
 export type { DynamicObservableDefinition, ComputedObservableResult } from './utils/dynamicObservable';
+
+// ── Optimization ────────────────────────────────────────────────────────
+export { nelderMead } from './services/optimization/nelderMead';
+export type { NelderMeadOptions, NelderMeadProgress, NelderMeadResult } from './services/optimization/nelderMead';
+export { projectedNM } from './services/optimization/projectedNM';
+export type { ProjectedNMOptions } from './services/optimization/projectedNM';
+export { sbplx } from './services/optimization/sbplx';
+export type { SbplxOptions, SbplxResult } from './services/optimization/sbplx';
 
 // ── Debugger ────────────────────────────────────────────────────────
 export { NetworkTracer } from './services/debugger/NetworkTracer';

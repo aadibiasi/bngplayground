@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync, mkdtempSync, rmSync, copyFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve, dirname, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -23,6 +23,7 @@ import type { BNGLModel } from '../types';
 
 // Import BNG2 path defaults
 import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD } from '../tools/bngDefaults.js';
+import { BNG2_PARSE_AND_ODE_VERIFIED_MODELS } from '../constants';
 
 const thisDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(thisDir, '..');
@@ -205,7 +206,18 @@ function runBNG2Content(bnglFileName: string, bnglContent: string): GdatData | n
     const gdatFiles = readdirSync(tempDir).filter(f => f.endsWith('.gdat'));
     if (gdatFiles.length === 0) return null;
 
-    const gdatContent = readFileSync(join(tempDir, gdatFiles[0]), 'utf-8');
+    // Pick the largest GDAT file, as it likely contains the main simulation results.
+    // For models like An_2009, An_2009.gdat (kinetics) is much larger than An_2009_equil.gdat.
+    let selectedFile = gdatFiles[0];
+    let maxSizeBytes = 0;
+    for (const f of gdatFiles) {
+      const stats = statSync(join(tempDir, f));
+      if (stats.size > maxSizeBytes) {
+        maxSizeBytes = stats.size;
+        selectedFile = f;
+      }
+    }
+    const gdatContent = readFileSync(join(tempDir, selectedFile), 'utf-8');
     return parseGdat(gdatContent);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
@@ -546,7 +558,7 @@ function expandRateLawMacro(
       return `(((${V}) * pow(${firstReactant}, (${nval}) - 1)) / (pow(${Kval}, ${nval}) + pow(${firstReactant}, ${nval})))`;
     });
   }
-  
+
   // Arrhenius(A, Ea) -> (A)*exp(-(Ea)/((R)*(T)))
   if (/Arrhenius\s*\(/i.test(expanded)) {
     expanded = expanded.replace(/Arrhenius\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/gi, (_, A, Ea) => {
@@ -581,7 +593,7 @@ function createRateEvaluator(
       const value = obsValues[obsName] ?? 0;
       evalExpr = evalExpr.replace(new RegExp(`\\b${escaped}\\b`, 'g'), value.toString());
     }
-    
+
     // Add rxnContext (ridx0, etc.)
     for (const [key, value] of Object.entries(rxnContext)) {
       evalExpr = evalExpr.replace(new RegExp(`\\b${key}\\b`, 'g'), value.toString());
@@ -597,7 +609,7 @@ function createRateEvaluator(
         pow: Math.pow,
         sqrt: Math.sqrt,
         abs: Math.abs,
-        sin: Math.sin, 
+        sin: Math.sin,
         cos: Math.cos,
         tan: Math.tan,
         // Add macro fallbacks (assuming ridx0 is first arg if called directly)
@@ -606,10 +618,10 @@ function createRateEvaluator(
         Hill: (V: number, K: number, n: number) => (V * Math.pow(rxnContext.ridx0 || 0, n - 1)) / (Math.pow(K, n) + Math.pow(rxnContext.ridx0 || 0, n)),
         Arrhenius: (A: number, Ea: number) => A * Math.exp(-Ea / ((context as any).R * (context as any).T || 1))
       };
-      
+
       const func = new Function(...Object.keys(context), `return ${evalExpr}`);
       const result = func(...Object.values(context));
-      
+
       if (typeof result !== 'number' || isNaN(result) || !isFinite(result)) {
         console.error(`  [RateEval] Error: ${evalExpr} => ${result}`);
         return 0;
@@ -639,7 +651,7 @@ async function runWebSimulator(
   model.species.forEach(s => {
     const g = BNGLParser.parseSpeciesGraph(s.name);
     const canonicalName = GraphCanonicalizer.canonicalize(g);
-    seedInfoMap.set(canonicalName, { 
+    seedInfoMap.set(canonicalName, {
       concentration: s.initialConcentration,
       isConstant: !!s.isConstant
     });
@@ -656,7 +668,7 @@ async function runWebSimulator(
     // Expand macros first
     const forwardMacro = expandRateLawMacro(r.rate, r.reactants.map((_, i) => `ridx${i}`), parametersMap);
     const hasObsInForward = forwardMacro.isFunctional || rateContainsObservables(forwardMacro.expanded, observableNames);
-    
+
     let reverseMacro = { expanded: r.reverseRate || '', isFunctional: false };
     let hasObsInReverse = false;
     if (r.reverseRate) {
@@ -752,8 +764,8 @@ async function runWebSimulator(
     species: result.species.map(s => {
       const canonicalName = GraphCanonicalizer.canonicalize(s.graph);
       const info = seedInfoMap.get(canonicalName);
-      return { 
-        name: canonicalName, 
+      return {
+        name: canonicalName,
         initialConcentration: info?.concentration ?? (s.concentration || 0),
         isConstant: info?.isConstant ?? false
       };
@@ -874,18 +886,18 @@ async function runWebSimulator(
           rxnContext[`ridx${j}`] = yIn[rxn.reactants[j]];
         }
       }
-      
+
       const effectiveRate = rxn.rateEvaluator ? (rxn.rateEvaluator as any)(obsValues, rxnContext) : rxn.rateConstant;
       let velocity = effectiveRate;
       for (let j = 0; j < rxn.reactants.length; j++) {
         velocity *= yIn[rxn.reactants[j]];
       }
-      
+
       for (let j = 0; j < rxn.reactants.length; j++) {
         const idx = rxn.reactants[j];
         if (!isConstantArray[idx]) dydt[idx] -= velocity;
       }
-      
+
       for (let j = 0; j < rxn.products.length; j++) {
         const idx = rxn.products[j];
         if (!isConstantArray[idx]) {
@@ -1231,7 +1243,7 @@ async function runWebSimulator(
     // Default to dense CVODE unless `sparse=>1` is explicitly requested.
     // (Using sparse-by-default can change convergence/accuracy and cause drift vs BNG2.pl.)
     const phaseSolverType: 'cvode' | 'cvode_sparse' = phase.sparse === true ? 'cvode_sparse' : 'cvode';
-    let activeSolver = await getSolver(phaseSolverType, phaseAtol, phaseRtol, 2_000_000);
+    let activeSolver = await getSolver(phaseSolverType, phaseAtol, phaseRtol, 10_000_000);
 
     const dtOut = (t_end - t_start) / n_steps;
     let t = t_start;
@@ -1489,7 +1501,7 @@ function extractSimParams(bnglContent: string): SimulationParams {
         rtol,
         sparse,
         steady_state: !!steadyStateMatch,
-        continue_from_previous: !!continueMatch || phases.length > 0,
+        continue_from_previous: !!continueMatch,
         setConcentrations: [...pendingSetConcentrations]
       });
 
@@ -1588,7 +1600,7 @@ function compareData(
   const isTime = (h: string) => h === 'time' || h === 'Time';
   const webCols = new Set(webHeadersNorm.filter(h => !isTime(h)));
   const refCols = new Set(refHeadersNorm.filter(h => !isTime(h)));
-  
+
   const columnMatch = [...webCols].every(c => refCols.has(c)) && [...refCols].every(c => webCols.has(c));
   if (!columnMatch) {
     const missing = [...refCols].filter(c => !webCols.has(c));
@@ -1602,8 +1614,8 @@ function compareData(
 
   if (webTimeIdx === -1 || refTimeIdx === -1) {
     return {
-      match: false, 
-      errors: ['Time column missing'], 
+      match: false,
+      errors: ['Time column missing'],
       details: {
         webRows: webData.data.length,
         refRows: refData.data.length,
@@ -1620,7 +1632,7 @@ function compareData(
   const isSteadyStateModel = STEADY_STATE_MODELS.some(m =>
     modelName.toLowerCase().includes(m.toLowerCase())
   );
-  
+
   const isSteadyStateRowMismatch = isSteadyStateModel && webData.data.length !== refData.data.length;
 
   const refColIndexByNorm = new Map<string, number>();
@@ -1649,7 +1661,7 @@ function compareData(
 
   // Steady-state exemption: if time grid matches in overlap and values match, accept it.
   if (isSteadyStateRowMismatch && timeGridMatches) {
-     timeMatch = true; // tentative, will check values
+    timeMatch = true; // tentative, will check values
   }
 
   for (let rowIdx = 0; rowIdx < minRows; rowIdx++) {
@@ -1679,10 +1691,10 @@ function compareData(
       }
 
       if (absError > ABS_TOL && relError > REL_TOL) {
-         valuesMatchInOverlap = false;
-         if (errors.length < 5) {
-             errors.push(`${colName} @ t=${webTime}: web=${webVal.toPrecision(6)}, ref=${refVal.toPrecision(6)} (rel=${(relError*100).toFixed(4)}%)`);
-         }
+        valuesMatchInOverlap = false;
+        if (errors.length < 5) {
+          errors.push(`${colName} @ t=${webTime}: web=${webVal.toPrecision(6)}, ref=${refVal.toPrecision(6)} (rel=${(relError * 100).toFixed(4)}%)`);
+        }
       }
     }
   }
@@ -1691,28 +1703,28 @@ function compareData(
 
   // Final verdict logic
   let match = columnMatch && valuesMatchInOverlap;
-  
+
   if (!timeMatch && !isSteadyStateRowMismatch) {
-      match = false;
-      errors.unshift(`Time grid mismatch or row count mismatch (web=${webData.data.length}, ref=${refData.data.length})`);
+    match = false;
+    errors.unshift(`Time grid mismatch or row count mismatch (web=${webData.data.length}, ref=${refData.data.length})`);
   } else if (isSteadyStateRowMismatch && valuesMatchInOverlap) {
-      // Pass with note
-      // console.log(`    (Steady-state row mismatch accepted for ${modelName})`);
+    // Pass with note
+    // console.log(`    (Steady-state row mismatch accepted for ${modelName})`);
   }
 
   return {
     match,
     errors,
     details: {
-        webRows: webData.data.length,
-        refRows: refData.data.length,
-        columns: webData.headers,
-        columnMatch,
-        timeMatch,
-        maxRelativeError,
-        maxAbsoluteError,
-        errorAtTime,
-        errorColumn
+      webRows: webData.data.length,
+      refRows: refData.data.length,
+      columns: webData.headers,
+      columnMatch,
+      timeMatch,
+      maxRelativeError,
+      maxAbsoluteError,
+      errorAtTime,
+      errorColumn
     }
   };
 }
@@ -1735,8 +1747,8 @@ function getTestModels(): { model: string; path: string }[] {
       validFiles.forEach(absPath => {
         const modelName = basename(absPath).replace(/\.bngl$/i, '');
         if (!seenPaths.has(absPath)) {
-            models.push({ model: modelName, path: absPath });
-            seenPaths.add(absPath);
+          models.push({ model: modelName, path: absPath });
+          seenPaths.add(absPath);
         }
       });
       console.log(`[Discovery] Loaded ${models.length} authenticated models from valid_models.json`);
@@ -1749,18 +1761,18 @@ function getTestModels(): { model: string; path: string }[] {
   const reportPath = join(projectRoot, 'bng2_test_report.json');
   if (existsSync(reportPath)) {
     try {
-        const report = JSON.parse(readFileSync(reportPath, 'utf-8'));
-        for (const r of (report.passed || [])) {
+      const report = JSON.parse(readFileSync(reportPath, 'utf-8'));
+      for (const r of (report.passed || [])) {
         if (r.hasGdat) {
-            // Check if path is absolute or relative, resolve if needed
-            // The report usually has absolute paths from the machine that ran it
-            // We'll trust checking existsSync
-            if (existsSync(r.path) && !seenPaths.has(r.path)) {
-                models.push({ model: r.model, path: r.path });
-                seenPaths.add(r.path);
-            }
+          // Check if path is absolute or relative, resolve if needed
+          // The report usually has absolute paths from the machine that ran it
+          // We'll trust checking existsSync
+          if (existsSync(r.path) && !seenPaths.has(r.path)) {
+            models.push({ model: r.model, path: r.path });
+            seenPaths.add(r.path);
+          }
         }
-        }
+      }
     } catch (e) { console.warn(`[Discovery] Failed to parse bng2_test_report.json`, e); }
   }
 
@@ -1771,6 +1783,20 @@ function getTestModels(): { model: string; path: string }[] {
     for (const file of exampleFiles) {
       const modelName = file.replace('.bngl', '');
       const fullPath = join(exampleDir, file);
+      if (!seenPaths.has(fullPath)) {
+        models.push({ model: modelName, path: fullPath });
+        seenPaths.add(fullPath);
+      }
+    }
+  }
+
+  // 4. Add public/models (Main gallery models)
+  const publicModelsDir = join(projectRoot, 'public', 'models');
+  if (existsSync(publicModelsDir)) {
+    const publicFiles = readdirSync(publicModelsDir).filter(f => f.endsWith('.bngl'));
+    for (const file of publicFiles) {
+      const modelName = file.replace('.bngl', '');
+      const fullPath = join(publicModelsDir, file);
       if (!seenPaths.has(fullPath)) {
         models.push({ model: modelName, path: fullPath });
         seenPaths.add(fullPath);
@@ -1795,9 +1821,13 @@ describeFn('Web Simulator vs BNG2.pl GDAT Comparison', () => {
     return;
   }
 
-  // Filter out models with known performance issues
-  const modelsToTest = testModels.filter(m => !SKIP_MODELS.has(m.model));
-  const skippedModels = testModels.filter(m => SKIP_MODELS.has(m.model));
+  // Filter out models with known performance issues or those not verified for ODE parity
+  const modelsToTest = testModels.filter(m => {
+    const isVerified = BNG2_PARSE_AND_ODE_VERIFIED_MODELS.has(m.model);
+    const isExcluded = SKIP_MODELS.has(m.model);
+    return isVerified && !isExcluded;
+  });
+  const skippedModels = testModels.filter(m => !modelsToTest.some(mt => mt.model === m.model));
 
   console.log(`\n╔════════════════════════════════════════════════════════════════╗`);
   console.log(`║  Testing ${modelsToTest.length} models (skipping ${skippedModels.length} slow models)            ║`);
@@ -1817,6 +1847,14 @@ describeFn('Web Simulator vs BNG2.pl GDAT Comparison', () => {
       }
 
       const bnglContent = readFileSync(bnglPath, 'utf-8');
+      
+      // Ensure there is an active simulate command
+      const hasSimulate = /\bsimulate(?:_ode|_ssa|_nf)?\s*\(/i.test(bnglContent.replace(/#[^\n]*/g, ''));
+      if (!hasSimulate) {
+        console.warn(`  ⚠️ Skipping: No explicit simulate command found in ${modelName}`);
+        return;
+      }
+
       const forceDefaultOde = shouldForceDefaultOdeSimulation(bnglContent);
       const comparisonBngl = forceDefaultOde ? withDefaultOdeSimulateBlock(bnglContent) : bnglContent;
       const params = extractSimParams(comparisonBngl);

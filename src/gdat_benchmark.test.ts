@@ -10,13 +10,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Use ANTLR parser wrapper
-import { parseBNGLWithANTLR } from './parser/BNGLParserWrapper';
-import { NetworkGenerator } from './services/graph/NetworkGenerator';
-import { BNGLParser } from './services/graph/core/BNGLParser';
-import { GraphCanonicalizer } from './services/graph/core/Canonical';
-import { NautyService } from './services/graph/core/NautyService';
+import { parseBNGLWithANTLR, NetworkGenerator, BNGLParser, GraphCanonicalizer, NautyService } from '@bngplayground/engine';
 import { createSolver } from '@bngplayground/engine';
-import { findConservationLaws, createReducedSystem } from './services/ConservationLaws';
+import { findConservationLaws, createReducedSystem } from '@bngplayground/engine';
 import type { BNGLModel, SimulationResults, SimulationPhase, ConcentrationChange } from '../types';
 
 import modelsList from './gdat_models.json';
@@ -341,7 +337,7 @@ export async function _simulateModel(inputModel: BNGLModel, options: { t_end: nu
   };
 
   // Build observable evaluator - use proper graph pattern matching
-  const { GraphMatcher } = await import('./services/graph/core/Matcher');
+  const { GraphMatcher } = await import('@bngplayground/engine');
 
   // BNG2 semantics: observable pattern match counts should not overcount purely
   // symmetric embeddings (e.g., swapping identical molecules in a dimer).

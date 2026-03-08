@@ -12,7 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
-import { parseBNGLWithANTLR } from '../src/parser/BNGLParserWrapper.ts';
+import { parseBNGLWithANTLR } from '@bngplayground/engine';
 import { NetworkGenerator } from '@bngplayground/engine';
 import { BNGLParser } from '@bngplayground/engine';
 import { NautyService } from '@bngplayground/engine';

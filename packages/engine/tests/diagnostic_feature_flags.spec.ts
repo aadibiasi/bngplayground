@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { evaluateFunctionalRate, getFeatureFlags, _setEvaluatorRefForTests, SafeExpressionEvaluator, setFeatureFlags } from '@bngplayground/engine';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { getFeatureFlags, setFeatureFlags } from '../src/featureFlags';
+import { _setEvaluatorRefForTests, evaluateFunctionalRate } from '../src/services/simulation/ExpressionEvaluator';
+import { SafeExpressionEvaluator } from '../src/utils/safeExpressionEvaluator';
 
 describe('Diagnostic: Feature Flags and Rate Evaluation', () => {
   beforeAll(() => {
@@ -14,13 +16,11 @@ describe('Diagnostic: Feature Flags and Rate Evaluation', () => {
   it('should evaluate simple parameter ka=0.01', () => {
     setFeatureFlags({ functionalRatesEnabled: true });
     const result = evaluateFunctionalRate('ka', { ka: 0.01 }, {});
-    console.log('[Test] evaluateFunctionalRate("ka", {ka: 0.01}, {}) =', result);
     expect(result).toBeCloseTo(0.01);
   });
 
   it('should evaluate expression 0.01 (constant)', () => {
     const result = evaluateFunctionalRate('0.01', {}, {});
-    console.log('[Test] evaluateFunctionalRate("0.01", {}, {}) =', result);
     expect(result).toBeCloseTo(0.01);
   });
 

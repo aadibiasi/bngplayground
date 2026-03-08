@@ -1,10 +1,6 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { evaluateFunctionalRate, _setEvaluatorRefForTests } from '@bngplayground/engine';
-import { SafeExpressionEvaluator } from '@bngplayground/engine';
-
-// Enable features for testing
-import { setFeatureFlags } from '../../services/featureFlags';
+import { evaluateFunctionalRate, _setEvaluatorRefForTests, SafeExpressionEvaluator, setFeatureFlags } from '@bngplayground/engine';
 
 describe('ExpressionEvaluation', () => {
     beforeAll(() => {

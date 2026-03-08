@@ -12,12 +12,27 @@ export interface FeatureFlags {
    * To disable at build time, set `VITE_ENABLE_FUNCTIONAL_RATES=false`.
    */
   functionalRatesEnabled: boolean;
+
+  /**
+   * Enable conservation law ODE reduction.
+   * When true, SimulationLoop computes conserved moieties after network
+   * expansion, creates a reduced ODE system, solves it, then expands back
+   * to full state. Reduces solver dimensionality for models with linear
+   * conservation relations (common in signalling/enzymatic models).
+   *
+   * Default: false — SparseODESolver already uses this internally;
+   * enabling it for the CVODE path requires careful integration testing.
+   *
+   * Enable with: setFeatureFlags({ conservationLawReduction: true })
+   */
+  conservationLawReduction: boolean;
 }
 
 // Initialize from build-time environment (Vite). Default true after security hardening.
 let FEATURE_FLAGS: FeatureFlags = {
   functionalRatesEnabled: (typeof (import.meta as any).env !== 'undefined' &&
     String((import.meta as any).env.VITE_ENABLE_FUNCTIONAL_RATES) === 'false') ? false : true,
+  conservationLawReduction: false,
 };
 
 const cacheClearCallbacks: Array<() => void> = [];

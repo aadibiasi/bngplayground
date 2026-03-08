@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { projectedNM } from '../../services/optimization/projectedNM';
+import { projectedNM } from '@bngplayground/engine';
 
 // ---------------------------------------------------------------------------
 // Standard test functions

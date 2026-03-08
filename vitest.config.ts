@@ -11,7 +11,7 @@ export default defineConfig({
     // Fast default suite for day-to-day development.
     // Heavy parity/integration/benchmark suites run via `npm run test:full`
     // or targeted `npx vitest run <file>`.
-    include: ['tests/**/*.spec.ts', 'tests/**/*.spec.tsx'],
+    include: ['tests/**/*.{test,spec}.{ts,tsx}', 'src/**/*.{test,spec}.{ts,tsx}'],
 
     // Exclude local debugging / reproduction specs from the default run.
     // (These can be invoked explicitly via `npx vitest run <file>`.)
@@ -26,10 +26,7 @@ export default defineConfig({
       'tests/*repro*.{test,spec}.ts',
       'tests/*spawnsync*.{test,spec}.ts',
       'tests/*sequential*.{test,spec}.ts',
-      'tests/**/*parity*.{test,spec}.ts',
-      'tests/**/*comparison*.{test,spec}.ts',
       'tests/**/*benchmark*.{test,spec}.ts',
-      'tests/bng2-comparison.spec.ts',
       'tests/gdat-regression.spec.ts',
       'tests/examples.spec.ts',
       'tests/examples_copy.spec.ts',
@@ -48,8 +45,18 @@ export default defineConfig({
       'tests/webgpu-solver.spec.ts',
       'tests/regulatoryTab.spec.tsx',
       'tests/constants.spec.ts',
+      'tests/diagnostic_feature_flags.spec.ts',
+      'tests/functionalRatesSecurity.spec.ts',
+      'tests/parser/ExpressionEvaluation.test.ts',
+      'tests/parser/RateLawCompatibility.spec.ts',
+      'tests/services/paramUtils.spec.ts',
+      'tests/services/ConservationLaws.spec.ts',
+      'tests/services/projectedNM.spec.ts',
+      'tests/services/SparseLUSolver.spec.ts',
+      'tests/services/sbplx.spec.ts',
       'tests/services/CompartmentalProcessor.spec.ts',
       'tests/services/XMLValidator.spec.ts',
+      'tests/safeExpressionEvaluator.spec.ts',
       // WASM-dependent tests (CVODE doesn't load in Node.js)
       'tests/simulation/SimulationOptions.spec.ts',
       'tests/services/SimulationLoop.spec.ts',

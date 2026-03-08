@@ -1,8 +1,7 @@
 // @ts-nocheck
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-
-import { parseBNGLWithANTLR } from './parser/BNGLParserWrapper';
+import { parseBNGLWithANTLR } from '@bngplayground/engine';
 
 describe('BNGL parser regressions', () => {
   it('parses Jaruszewicz-Blonska_2023 (handles UTF-8 BOM)', () => {
@@ -44,4 +43,3 @@ describe('BNGL parser regressions', () => {
     expect(result.model!.simulationPhases![0].n_steps).toBe(1000);
   });
 });
-

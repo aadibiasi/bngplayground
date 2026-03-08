@@ -1,7 +1,6 @@
 // @ts-nocheck
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getFeatureFlags, setFeatureFlags } from '../services/featureFlags';
-import { evaluateFunctionalRate, getCompiledRateFunction } from '@bngplayground/engine';
+import { evaluateFunctionalRate, getCompiledRateFunction, getFeatureFlags, setFeatureFlags } from '@bngplayground/engine';
 
 describe('Functional Rates Security', () => {
     beforeEach(() => {

@@ -9,8 +9,7 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 
 import { parseBNGL } from '../services/parseBNGL';
-import { NetworkGenerator } from './services/graph/NetworkGenerator';
-import { BNGLParser } from './services/graph/core/BNGLParser';
+import { NetworkGenerator, BNGLParser } from '@bngplayground/engine';
 
 describe('Diagnostic Benchmark: Kozer_2014', () => {
     const projectRoot = path.resolve(__dirname, '..');

@@ -1,6 +1,6 @@
 
 import { describe, it, expect } from 'vitest';
-import { roundForInput, computeDefaultBounds, generateRange, validateScanSettings, DEFAULT_ZERO_DELTA, formatNumber } from '../../src/services/analysis/ParameterScan';
+import { roundForInput, computeDefaultBounds, generateRange, validateScanSettings, DEFAULT_ZERO_DELTA, formatNumber } from '@bngplayground/engine';
 
 describe('ParameterScan Analysis Service', () => {
 

@@ -1,32 +1,12 @@
-/**
- * tests/services/sbplx.spec.ts
- *
- * Tests for the Subplex (SBPLX) optimizer.
- *
- * Verifies:
- * 1. Convergence on standard test functions (Rosenbrock, sphere)
- * 2. Subspace decomposition correctness
- * 3. Comparison with standard Nelder-Mead (fewer evals for high-dim)
- * 4. AbortSignal support
- * 5. Progress callback
- */
+import { describe, expect, it } from 'vitest';
+import { sbplx } from '../src/services/optimization/sbplx';
 
-import { describe, it, expect } from 'vitest';
-import { sbplx, nelderMead } from '@bngplayground/engine';
-
-// ---------------------------------------------------------------------------
-// Standard test functions
-// ---------------------------------------------------------------------------
-
-/** Sphere function: f(x) = sum(x_i^2). Global min at origin. */
 const sphere = async (x: number[]): Promise<number> =>
-  x.reduce((s, xi) => s + xi * xi, 0);
+  x.reduce((sum, xi) => sum + xi * xi, 0);
 
-/** Rosenbrock 2D: f(x,y) = (1-x)^2 + 100*(y-x^2)^2. Global min at (1,1). */
 const rosenbrock2d = async (x: number[]): Promise<number> =>
   (1 - x[0]) ** 2 + 100 * (x[1] - x[0] ** 2) ** 2;
 
-/** N-dimensional Rosenbrock: sum_{i=0}^{n-2} [(1-x_i)^2 + 100*(x_{i+1}-x_i^2)^2] */
 const rosenbrockNd = async (x: number[]): Promise<number> => {
   let sum = 0;
   for (let i = 0; i < x.length - 1; i++) {
@@ -34,10 +14,6 @@ const rosenbrockNd = async (x: number[]): Promise<number> => {
   }
   return sum;
 };
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('SBPLX optimizer', () => {
   it('converges on 2D sphere function', async () => {
@@ -64,23 +40,17 @@ describe('SBPLX optimizer', () => {
   });
 
   it('converges on 5D Rosenbrock function', async () => {
-    // 5D Rosenbrock is highly correlated and non-separable, a great test for SBPLX
-    const x0 = [-1, -1, -1, -1, -1]; // Start further away to force exploration
-
-    // SBPLX should solve this efficiently
-    const sbResult = await sbplx(rosenbrockNd, x0, {
+    const result = await sbplx(rosenbrockNd, [-1, -1, -1, -1, -1], {
       maxEval: 5000,
       ftol: 1e-6,
     });
 
-    // SBPLX should reach a reasonable minimum
-    expect(sbResult.value).toBeLessThan(1.0);
-    expect(sbResult.converged).toBe(true);
+    expect(result.value).toBeLessThan(1.0);
+    expect(result.converged).toBe(true);
   });
 
   it('converges on 8D sphere function', async () => {
-    const x0 = [1, 2, 3, 4, 5, 6, 7, 8];
-    const result = await sbplx(sphere, x0, {
+    const result = await sbplx(sphere, [1, 2, 3, 4, 5, 6, 7, 8], {
       maxEval: 3000,
       ftol: 1e-6,
     });
@@ -90,8 +60,6 @@ describe('SBPLX optimizer', () => {
 
   it('respects AbortSignal', async () => {
     const controller = new AbortController();
-
-    // Abort immediately.
     controller.abort();
 
     const result = await sbplx(sphere, [5, -3, 1, -2], {
@@ -113,20 +81,17 @@ describe('SBPLX optimizer', () => {
 
     expect(progressCalls.length).toBeGreaterThan(0);
 
-    // Progress values should be non-increasing.
     for (let i = 1; i < progressCalls.length; i++) {
       expect(progressCalls[i]).toBeLessThanOrEqual(progressCalls[i - 1] + 1e-10);
     }
   });
 
   it('returns maxeval stop reason when max evals reached', async () => {
-    // Use a hard function with very few evals and no abort signal.
     const result = await sbplx(rosenbrockNd, [0, 0, 0, 0, 0], {
       maxEval: 50,
       ftol: 1e-20,
     });
 
-    // Should hit maxeval, not converge.
     expect(result.converged).toBe(false);
     expect(result.stopReason).toMatch(/maxeval|aborted/);
   });

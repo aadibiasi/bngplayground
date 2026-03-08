@@ -340,6 +340,7 @@ export const NFSIM_MODELS = new Set([
 // Note: A separate "web batch run" (e.g., web_output/*.csv) is useful for parity checks,
 // but is NOT used for website visibility gating.
 export const BNG2_PARSE_AND_ODE_VERIFIED_MODELS = new Set([
+  'An_2009',
   'akt-signaling',
   'allosteric-activation',
   'apoptosis-cascade',

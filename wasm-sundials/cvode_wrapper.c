@@ -10,7 +10,9 @@ typedef double realtype;
 #include <cvode/cvode_ls.h>
 #include <nvector/nvector_serial.h>
 #include <sunmatrix/sunmatrix_dense.h>
+#include <sunmatrix/sunmatrix_sparse.h>
 #include <sunlinsol/sunlinsol_dense.h>
+#include <sunlinsol/sunlinsol_klu.h>
 #include <sunlinsol/sunlinsol_spgmr.h>
 #include <sundials/sundials_context.h>
 #include <sunnonlinsol/sunnonlinsol_newton.h>
@@ -66,6 +68,11 @@ typedef struct {
     long int max_num_steps; // CVODE mxstep (auto-grown on CV_TOO_MUCH_WORK)
     NetworkByteCode* network_bc;
 } CvodeWrapper;
+
+static int configure_sparse_spgmr_solver(CvodeWrapper* mem);
+static int configure_klu_sparse_jacobian_solver(CvodeWrapper* mem, NetworkByteCode* bc);
+static int configure_spgmr_sparse_jacobian_solver(CvodeWrapper* mem, NetworkByteCode* bc);
+static int configure_sparse_jacobian_solver(CvodeWrapper* mem, NetworkByteCode* bc);
 
 // RHS function that bridges CVODE -> JS or Bytecode
 int f_bridge(realtype t, N_Vector y, N_Vector ydot, void *user_data) {
@@ -154,7 +161,10 @@ static int network_jac(long int N, realtype t, N_Vector y, N_Vector fy, SUNMatri
     // Explicitly zero matrix since we only fill nonzero entries from the sparsity pattern
     SUNMatZero(Jac);
 
-    // CSR iteration (assuming Dense matrix output for now)
+    const int is_sparse = SUNMatGetID(Jac) == SUNMATRIX_SPARSE;
+    sunrealtype* sparse_data = is_sparse ? SUNSparseMatrix_Data(Jac) : NULL;
+
+    // CSR iteration over the Jacobian sparsity pattern.
     for (int i = 0; i < bc->nSpecies; i++) {
         for (int k = bc->jacRowPtr[i]; k < bc->jacRowPtr[i+1]; k++) {
             int j = bc->jacColIdx[k];
@@ -199,10 +209,144 @@ static int network_jac(long int N, realtype t, N_Vector y, N_Vector fy, SUNMatri
                 }
                 sum += coeff * rate_without_j;
             }
-            SM_ELEMENT_D(Jac, i, j) = sum / bc->speciesVolumes[i];
+            if (is_sparse) {
+                sparse_data[k] = sum / bc->speciesVolumes[i];
+            } else {
+                SM_ELEMENT_D(Jac, i, j) = sum / bc->speciesVolumes[i];
+            }
         }
     }
     return 0;
+}
+
+static int configure_sparse_spgmr_solver(CvodeWrapper* mem) {
+    if (!mem || !mem->y || !mem->sunctx) return -1;
+
+    if (mem->LS) {
+        SUNLinSolFree(mem->LS);
+        mem->LS = NULL;
+    }
+
+    mem->LS = SUNLinSol_SPGMR(mem->y, SUN_PREC_NONE, 0, mem->sunctx);
+    if (!mem->LS) return -1;
+
+    if (mem->cvode_mem) {
+        return CVodeSetLinearSolver(mem->cvode_mem, mem->LS, NULL);
+    }
+
+    return 0;
+}
+
+static int configure_klu_sparse_jacobian_solver(CvodeWrapper* mem, NetworkByteCode* bc) {
+    if (!mem || !bc || !bc->jacRowPtr || !mem->cvode_mem) return -1;
+
+    const sunindextype nnz = (sunindextype)bc->jacRowPtr[bc->nSpecies];
+    if (nnz <= 0) return -1;
+
+    if (mem->A) {
+        SUNMatDestroy(mem->A);
+        mem->A = NULL;
+    }
+
+    mem->A = SUNSparseMatrix((sunindextype)bc->nSpecies, (sunindextype)bc->nSpecies, nnz, CSR_MAT, mem->sunctx);
+    if (!mem->A) return -1;
+
+    sunindextype* row_ptr = SUNSparseMatrix_IndexPointers(mem->A);
+    sunindextype* col_idx = SUNSparseMatrix_IndexValues(mem->A);
+    sunrealtype* data = SUNSparseMatrix_Data(mem->A);
+    if (!row_ptr || !col_idx || !data) {
+        SUNMatDestroy(mem->A);
+        mem->A = NULL;
+        return -1;
+    }
+
+    for (int i = 0; i <= bc->nSpecies; i++) row_ptr[i] = (sunindextype)bc->jacRowPtr[i];
+    for (sunindextype i = 0; i < nnz; i++) {
+        col_idx[i] = (sunindextype)bc->jacColIdx[i];
+        data[i] = 0.0;
+    }
+
+    if (mem->LS) {
+        SUNLinSolFree(mem->LS);
+        mem->LS = NULL;
+    }
+
+    mem->LS = SUNLinSol_KLU(mem->y, mem->A, mem->sunctx);
+    if (!mem->LS) {
+        SUNMatDestroy(mem->A);
+        mem->A = NULL;
+        return -1;
+    }
+
+    SUNLinSol_KLUSetOrdering(mem->LS, SUNKLU_ORDERING_DEFAULT);
+
+    int flag = CVodeSetLinearSolver(mem->cvode_mem, mem->LS, mem->A);
+    if (flag != 0) return flag;
+
+    flag = CVodeSetJacFn(mem->cvode_mem, (CVLsJacFn)network_jac);
+    if (flag != 0) return flag;
+
+    mem->use_analytical_jac = 1;
+    return 0;
+}
+
+static int configure_spgmr_sparse_jacobian_solver(CvodeWrapper* mem, NetworkByteCode* bc) {
+    if (!mem || !bc || !bc->jacRowPtr || !mem->cvode_mem) return -1;
+
+    const sunindextype nnz = (sunindextype)bc->jacRowPtr[bc->nSpecies];
+    if (nnz <= 0) return -1;
+
+    if (mem->A) {
+        SUNMatDestroy(mem->A);
+        mem->A = NULL;
+    }
+
+    mem->A = SUNSparseMatrix((sunindextype)bc->nSpecies, (sunindextype)bc->nSpecies, nnz, CSR_MAT, mem->sunctx);
+    if (!mem->A) return -1;
+
+    sunindextype* row_ptr = SUNSparseMatrix_IndexPointers(mem->A);
+    sunindextype* col_idx = SUNSparseMatrix_IndexValues(mem->A);
+    sunrealtype* data = SUNSparseMatrix_Data(mem->A);
+    if (!row_ptr || !col_idx || !data) {
+        SUNMatDestroy(mem->A);
+        mem->A = NULL;
+        return -1;
+    }
+
+    for (int i = 0; i <= bc->nSpecies; i++) row_ptr[i] = (sunindextype)bc->jacRowPtr[i];
+    for (sunindextype i = 0; i < nnz; i++) {
+        col_idx[i] = (sunindextype)bc->jacColIdx[i];
+        data[i] = 0.0;
+    }
+
+    if (configure_sparse_spgmr_solver(mem) != 0) {
+        SUNMatDestroy(mem->A);
+        mem->A = NULL;
+        return -1;
+    }
+
+    int flag = CVodeSetLinearSolver(mem->cvode_mem, mem->LS, mem->A);
+    if (flag != 0) {
+        SUNMatDestroy(mem->A);
+        mem->A = NULL;
+        return flag;
+    }
+
+    flag = CVodeSetJacFn(mem->cvode_mem, (CVLsJacFn)network_jac);
+    if (flag != 0) {
+        SUNMatDestroy(mem->A);
+        mem->A = NULL;
+        return flag;
+    }
+
+    mem->use_analytical_jac = 1;
+    return 0;
+}
+
+static int configure_sparse_jacobian_solver(CvodeWrapper* mem, NetworkByteCode* bc) {
+    int flag = configure_klu_sparse_jacobian_solver(mem, bc);
+    if (flag == 0) return 0;
+    return configure_spgmr_sparse_jacobian_solver(mem, bc);
 }
 
 // Jacobian function that bridges CVODE -> JS
@@ -388,7 +532,7 @@ void* init_solver_sparse(int neq, double t0, double* y0_data, double reltol, dou
     mem->use_sparse = 1;
     mem->network_bc = NULL;
     mem->use_analytical_jac = 0;
-    mem->A = NULL;  // Matrix-free method - no matrix needed
+    mem->A = NULL;  // Bound later when a network with Jacobian sparsity is attached
     mem->LS = NULL;
     mem->NLS = NULL;
 
@@ -402,9 +546,14 @@ void* init_solver_sparse(int neq, double t0, double* y0_data, double reltol, dou
     mem->y = N_VNew_Serial(neq, mem->sunctx);
     for (int i=0; i<neq; i++) NV_Ith_S(mem->y, i) = y0_data[i];
 
-    // Create SPGMR linear solver (Scaled Preconditioned GMRES)
-    // Match BNG2's CVSpgmr(..., PREC_NONE, 0) behavior by using maxl=0 (library default)
-    mem->LS = SUNLinSol_SPGMR(mem->y, SUN_PREC_NONE, 0, mem->sunctx);
+    // Start matrix-free and upgrade to KLU once a sparse Jacobian pattern is bound.
+    // If KLU configuration fails at runtime, the wrapper falls back to the previous SPGMR path.
+    if (configure_sparse_spgmr_solver(mem) != 0) {
+        N_VDestroy(mem->y);
+        SUNContext_Free(&mem->sunctx);
+        free(mem);
+        return NULL;
+    }
 
     // Create CVODE memory
     mem->cvode_mem = CVodeCreate(CV_BDF, mem->sunctx);
@@ -416,7 +565,7 @@ void* init_solver_sparse(int neq, double t0, double* y0_data, double reltol, dou
     CVodeSStolerances(mem->cvode_mem, reltol, abstol);
     CVodeSetNonlinearSolver(mem->cvode_mem, mem->NLS);
     
-    // For SPGMR, pass NULL for the matrix (matrix-free)
+    // Keep SPGMR until bytecode Jacobian data is bound, then switch to KLU if available.
     CVodeSetLinearSolver(mem->cvode_mem, mem->LS, NULL);
     
 
@@ -700,7 +849,19 @@ void bind_network(uintptr_t solver_ptr, uintptr_t network_ptr) {
     // Set CVODE User Data explicitly 
     CVodeSetUserData(mem->cvode_mem, mem);
 
-    // Swap to analytical Jacobian
+    if (mem->use_sparse && bc->jacRowPtr) {
+        if (configure_sparse_jacobian_solver(mem, bc) != 0) {
+            if (mem->A) {
+                SUNMatDestroy(mem->A);
+                mem->A = NULL;
+            }
+            CVodeSetLinearSolver(mem->cvode_mem, mem->LS, NULL);
+            mem->use_analytical_jac = 0;
+        }
+        return;
+    }
+
+    // Dense/native analytical Jacobian path.
     if (mem->use_analytical_jac && bc->jacRowPtr) {
         CVodeSetJacFn(mem->cvode_mem, (CVLsJacFn)network_jac);
     }

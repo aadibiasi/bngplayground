@@ -14,6 +14,8 @@
 
 import { ExpressionTranslator } from '../graph/core/ExpressionTranslator';
 import type { NetworkByteCode } from '../analysis/JITCompiler';
+import { SparseODESolver } from '../analysis/SparseODESolver';
+import type { Rxn } from '../graph/core/Rxn';
 
 
 export interface SolverOptions {
@@ -23,7 +25,7 @@ export interface SolverOptions {
   minStep: number;        // Minimum step size before failure
   maxStep: number;        // Maximum step size
   initialStep?: number;   // Initial step size (if not provided, computed automatically)
-  solver: 'auto' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'cvode_adams' | 'rosenbrock23' | 'rk45' | 'rk4' | 'sparse_implicit' | 'webgpu_rk4';
+  solver: 'auto' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'cvode_adams' | 'rosenbrock23' | 'rk45' | 'rk4' | 'sparse' | 'sparse_implicit' | 'webgpu_rk4';
   jacobianRowMajor?: (y: Float64Array, J: Float64Array) => void;  // Row-major Jacobian for Rosenbrock
 
   // Advanced CVODE options for stiff systems
@@ -1498,6 +1500,13 @@ export class CVODESolver {
 
     // Initialize solver.
     let solverMem: number;
+    const hasNativeSparseJacobian = !!(
+      this.networkByteCode?.jacRowPtr &&
+      this.networkByteCode?.jacColIdx &&
+      this.networkByteCode?.jacContribOffsets &&
+      this.networkByteCode?.jacContribRxnIdx &&
+      this.networkByteCode?.jacContribCoeffs
+    );
     if (this.jacobian && m._init_solver_jac) {
       m.jacobianCallback = (_t: number, yPtr: number, _fyPtr: number, JPtr: number, neqVal: number) => {
         const buf = m.HEAPF64.buffer;
@@ -1514,7 +1523,7 @@ export class CVODESolver {
     } else if (this.useAdams && m._init_solver_adams) {
       // Adams-Moulton for non-stiff systems (requires WASM rebuild to activate)
       solverMem = m._init_solver_adams(neq, t0, this.yPtr, rtol, atol, this.options.maxSteps);
-    } else if (this.useSparse) {
+    } else if (this.useSparse || hasNativeSparseJacobian) {
       solverMem = m._init_solver_sparse(neq, t0, this.yPtr, rtol, atol, this.options.maxSteps);
     } else {
       solverMem = m._init_solver(neq, t0, this.yPtr, rtol, atol, this.options.maxSteps);
@@ -1756,10 +1765,35 @@ class SparseImplicitSolver {
     y0: Float64Array,
     t0: number,
     tEnd: number,
-    checkCancelled?: () => void
+    _checkCancelled?: () => void
   ): SolverResult {
     console.log(`[SparseImplicitSolver] Integrating from t=${t0} to t=${tEnd}`);
-    return this.rosenbrock.integrate(y0, t0, tEnd, checkCancelled);
+    return this.rosenbrock.integrate(y0, t0, tEnd, _checkCancelled);
+  }
+}
+
+/**
+ * Wrapper for the new SparseODESolver to match ODESolver interface
+ */
+class SparseODESolverWrapper {
+  private solver: SparseODESolver;
+  constructor(n: number, f: DerivativeFunction, options: SolverOptions) {
+    const reactions = (options as any).reactions || [];
+    const speciesNames = (options as any).speciesNames || [];
+    this.solver = new SparseODESolver(n, reactions, f, new Float64Array(n), speciesNames, options);
+  }
+
+  integrate(y0: Float64Array, t0: number, tEnd: number): SolverResult {
+    const res = this.solver.integrate(y0, t0, tEnd, [tEnd], (_t, _y) => {
+       // Optional: capture intermediate steps if output was needed
+    });
+    
+    return {
+      success: res.success,
+      t: res.t,
+      y: res.y, 
+      steps: res.steps
+    };
   }
 }
 
@@ -1799,11 +1833,13 @@ export async function createSolver(
       // Try CVODE first, fallback to Rosenbrock23 on failure
       await CVODESolver.init();
       return new CVODEAutoSolver(n, f, opts, new CVODESolver(n, f, opts, false, undefined, opts.useAdams));
+    case 'sparse':
     case 'sparse_implicit':
       // Sparse implicit solver with ILU preconditioning - for extremely stiff systems
       // Requires reactions and speciesNames in options
-      console.log('[ODESolver] Using sparse_implicit solver');
-      return new SparseImplicitSolver(n, f, opts);
+      console.log('[ODESolver] Using SparseODESolver (Real Sparse Backend)');
+      const reactions = (opts as any).reactions || [];
+      return new SparseODESolverWrapper(n, f, opts as any);
     case 'webgpu_rk4':
       // WebGPU solver has async interface - for main simulation, use CPU fallback
       // WebGPU is better suited for ensemble/parameter scans via direct WebGPUODESolver import

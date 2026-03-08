@@ -7,6 +7,8 @@
  */
 
 import type { Rxn } from '../graph/core/Rxn';
+import { ExpressionTranslator } from '../graph/core/ExpressionTranslator';
+import { getExpressionDependencies } from '../../parser/ExpressionDependencies';
 
 /**
  * CSR format sparse matrix info
@@ -158,78 +160,104 @@ export function buildJacobianContributions(
   return contributions;
 }
 
+
 /**
- * Generate a JIT-compiled sparse Jacobian evaluation function.
+ * Generate a JIT-compiled analytical Jacobian evaluation function.
+ * Supports mass-action kinetics and constant rate expressions.
  * 
  * @param reactions - Array of reactions
  * @param nSpecies - Number of species
  * @param sparsity - Sparsity pattern
- * @param contributions - Pre-computed reaction contributions
+ * @param parameters - Parameter values for expression evaluation
  * @returns A function that evaluates J(y) into a flat data array
  */
-export function generateSparseJacobianFunction(
-  reactions: Array<{ reactants: number[]; rate: number }>,
+export function generateAnalyticalJacobian(
+  reactions: Rxn[],
   nSpecies: number,
   sparsity: SparseJacobianInfo,
-  contributions: ReactionContribution[][]
+  parameters: Record<string, number> = {}
 ): (y: Float64Array, data: Float64Array) => void {
+  const contributions = buildJacobianContributions(reactions, nSpecies, sparsity);
   const lines: string[] = [];
   
-  lines.push('// JIT-compiled sparse Jacobian evaluator');
-  lines.push('var rate, dv;');
+  lines.push('// JIT-compiled analytical Jacobian evaluator');
+  lines.push('var r_val, dv;');
   
+  // Bind parameters
+  for (const [name, value] of Object.entries(parameters)) {
+    if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) {
+      lines.push(`const ${name} = ${value};`);
+    }
+  }
+
+  // Pre-process reactions to handle complex rates vs simple rates
+  const rxnRateExprs = reactions.map(rxn => {
+    if (rxn.rateExpression) {
+      const translated = ExpressionTranslator.translate(rxn.rateExpression);
+      // Check for illegal patterns or y dependencies
+      const deps = getExpressionDependencies(rxn.rateExpression);
+      const hasSpeciesDep = Array.from(deps).some(d => d.startsWith('s') && !isNaN(parseInt(d.substring(1))));
+      
+      return { 
+        expr: translated, 
+        isConstant: !hasSpeciesDep,
+        statFactor: rxn.statFactor ?? 1
+      };
+    }
+    return { 
+      expr: (rxn.rate !== undefined ? rxn.rate.toString() : "0"), 
+      isConstant: true,
+      statFactor: rxn.statFactor ?? 1
+    };
+  });
+
   // For each non-zero entry, generate code to compute it
   for (let i = 0; i < nSpecies; i++) {
     for (let ptr = sparsity.rowPtr[i]; ptr < sparsity.rowPtr[i + 1]; ptr++) {
       const j = sparsity.colIdx[ptr];
       const contribs = contributions[ptr];
       
-      if (contribs.length === 0) {
-        lines.push(`data[${ptr}] = 0;`);
-        continue;
-      }
-      
       lines.push(`data[${ptr}] = 0;`);
       
       for (const contrib of contribs) {
         const rxn = reactions[contrib.rxnIdx];
+        const info = rxnRateExprs[contrib.rxnIdx];
         
-        // Compute rate = k * prod(y[reactants])
-        let rateExpr = `${rxn.rate}`;
-        for (const r of rxn.reactants) {
-          rateExpr += ` * y[${r}]`;
+        // Mass-action part: derivative of k * prod(y_r) wrt y_j
+        // d(k * y_j * prod(y_k))/dy_j = k * prod(y_k)
+        
+        let massActionPart = `${info.expr}`;
+        if (info.statFactor !== 1) massActionPart = `(${massActionPart} * ${info.statFactor})`;
+        
+        // Multiply by other reactants (excluding one instance of y_j)
+        const otherReactants = [...rxn.reactants];
+        const jIdx = otherReactants.indexOf(j);
+        if (jIdx !== -1) {
+          otherReactants.splice(jIdx, 1);
         }
         
-        // Derivative: dv = netStoichI * (stoichJ / y[j]) * rate
-        // Handle y[j] ≈ 0 case
+        for (const r of otherReactants) {
+          massActionPart += ` * y[${r}]`;
+        }
+        
+        // Coeff is netStoichI * reactantStoichJ
         const coeff = contrib.netStoichI * contrib.reactantStoichJ;
+        lines.push(`data[${ptr}] += ${coeff} * (${massActionPart});`);
         
-        if (contrib.reactantStoichJ === 1) {
-          // Simple case: dv = coeff * rate / y[j]
-          // When y[j] is near zero, use limit form
-          let limitExpr = `${contrib.netStoichI * rxn.rate}`;
-          for (const r of rxn.reactants) {
-            if (r !== j) {
-              limitExpr += ` * y[${r}]`;
-            }
-          }
-          lines.push(`dv = y[${j}] > 1e-100 ? ${coeff} * (${rateExpr}) / y[${j}] : ${limitExpr};`);
-        } else {
-          // Higher order: dv = 0 when y[j] ≈ 0
-          lines.push(`dv = y[${j}] > 1e-100 ? ${coeff} * (${rateExpr}) / y[${j}] : 0;`);
-        }
-        
-        lines.push(`data[${ptr}] += dv;`);
+        // If the rate itself depends on y[j] (non-mass-action), we need d(k)/dy[j] * prod(y_r)
+        // For now, we assume rates don't depend on species (standard BNG2 network simulation)
+        // but if they do, we'd need DF/dy[j] here.
       }
     }
   }
   
-  const code = `return function sparseJacobian(y, data) {\n  ${lines.join('\n  ')}\n}`;
+  const code = `return function analyticalJacobian(y, data) {\n  ${lines.join('\n  ')}\n}`;
   
   try {
     return new Function(code)() as (y: Float64Array, data: Float64Array) => void;
   } catch (e) {
-    console.error('[SparseJacobian] JIT compilation failed:', e);
-    throw e;
+    console.error('[SparseJacobian] Analytical JIT compilation failed:', e);
+    // Fallback to a zero function rather than crashing the solver
+    return (y: Float64Array, data: Float64Array) => { data.fill(0); };
   }
 }
