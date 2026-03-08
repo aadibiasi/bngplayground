@@ -9,11 +9,12 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 
 // Load the excluded models list from constants.ts by parsing the source
 // This avoids importing constants.ts which pulls in many large raw imports
 const NORMALIZED_BNG2_EXCLUDED = (() => {
-  const constantsPath = path.join(__dirname, '..', 'constants.ts');
+  const constantsPath = path.join(PROJECT_ROOT, 'constants.ts');
   try {
     const txt = fs.readFileSync(constantsPath, 'utf8');
     const m = txt.match(/export\s+const\s+BNG2_EXCLUDED_MODELS\s*=\s*new\s+Set\(\[([\s\S]*?)\]\)/m);
@@ -27,7 +28,7 @@ const NORMALIZED_BNG2_EXCLUDED = (() => {
 })();
 
 const NORMALIZED_BNG2_COMPATIBLE = (() => {
-  const constantsPath = path.join(__dirname, '..', 'constants.ts');
+  const constantsPath = path.join(PROJECT_ROOT, 'constants.ts');
   try {
     const txt = fs.readFileSync(constantsPath, 'utf8');
     const m = txt.match(/export\s+const\s+BNG2_COMPATIBLE_MODELS\s*=\s*new\s+Set\(\[([\s\S]*?)\]\)/m);
@@ -72,9 +73,14 @@ interface ComparisonResult {
   error?: string;
 }
 
+interface AlignedRowPair {
+  webRow: number[];
+  refRow: number[];
+  time: number;
+}
+
 // Project layout: compare exported browser CSVs in <repo>/web_output against
 // precomputed BNG2 outputs in <repo>/bng_test_output.
-const PROJECT_ROOT = path.resolve(__dirname, '..');
 const WEB_OUTPUT_DIR = path.join(PROJECT_ROOT, 'web_output');
 const BNG_OUTPUT_DIR = process.env.BNG_OUTPUT_DIR
   ? path.resolve(PROJECT_ROOT, process.env.BNG_OUTPUT_DIR)
@@ -180,6 +186,59 @@ function csvModelLabel(csvFile: string): string {
     .replace(/\.csv$/i, '');
 }
 
+function normalizeTimeSeriesRows(headers: string[], rows: number[][]): number[][] {
+  const timeIdx = headers.findIndex((header) => header.trim().toLowerCase() === 'time');
+  if (timeIdx === -1 || rows.length <= 1) return rows;
+
+  const sorted = [...rows].sort((left, right) => left[timeIdx] - right[timeIdx]);
+  const normalized: number[][] = [];
+
+  for (const row of sorted) {
+    const last = normalized[normalized.length - 1];
+    if (last && Math.abs(last[timeIdx] - row[timeIdx]) <= TIME_TOL) {
+      normalized[normalized.length - 1] = row;
+      continue;
+    }
+    normalized.push(row);
+  }
+
+  return normalized;
+}
+
+function alignRowsByTime(
+  webRows: number[][],
+  refRows: number[][],
+  webTimeIdx: number,
+  refTimeIdx: number,
+): AlignedRowPair[] {
+  const pairs: AlignedRowPair[] = [];
+  let webIndex = 0;
+  let refIndex = 0;
+
+  while (webIndex < webRows.length && refIndex < refRows.length) {
+    const webRow = webRows[webIndex];
+    const refRow = refRows[refIndex];
+    const webTime = webRow[webTimeIdx];
+    const refTime = refRow[refTimeIdx];
+    const delta = webTime - refTime;
+
+    if (Math.abs(delta) <= TIME_TOL) {
+      pairs.push({ webRow, refRow, time: webTime });
+      webIndex++;
+      refIndex++;
+      continue;
+    }
+
+    if (delta < 0) {
+      webIndex++;
+    } else {
+      refIndex++;
+    }
+  }
+
+  return pairs;
+}
+
 function parseCSV(content: string): { headers: string[]; data: number[][] } {
   const lines = content.trim().split('\n').filter(l => l.trim() && !l.startsWith('#'));
   const headers = lines[0].split(',').map(h => h.trim());
@@ -192,7 +251,7 @@ function parseCSV(content: string): { headers: string[]; data: number[][] } {
       return parsed;
     })
   );
-  return { headers, data };
+  return { headers, data: normalizeTimeSeriesRows(headers, data) };
 }
 
 function parseGDAT(content: string): { headers: string[]; data: number[][] } {
@@ -217,20 +276,7 @@ function parseGDAT(content: string): { headers: string[]; data: number[][] } {
       return parsed;
     }));
 
-  // Filter out duplicate rows based on time (handles multi-phase concatenation artifacts)
-  // BNG2.pl with continue=>1 outputs matching t_end and t_start rows
-  // We keep the first occurrence of each time point
-  const timeIdx = headers.findIndex(h => h.toLowerCase() === 'time');
-  if (timeIdx !== -1) {
-    const filteredData = data.filter((row, index, self) => {
-      if (index === 0) return true;
-      // Use epsilon for float comparison to catch duplicate times
-      return row[timeIdx] > self[index - 1][timeIdx] + 1e-9;
-    });
-    return { headers, data: filteredData };
-  }
-
-  return { headers, data };
+  return { headers, data: normalizeTimeSeriesRows(headers, data) };
 }
 
 interface SimCall {
@@ -706,34 +752,26 @@ function getMultiPhaseReference(
     for (let i = 0; i < refHeadersNorm.length; i++) refColIndexByNorm.set(refHeadersNorm[i], i);
 
     const minRows = Math.min(webData.data.length, refData.data.length);
-    let timeMatch = webData.data.length === refData.data.length;
+    const alignedRows = alignRowsByTime(webData.data, refData.data, webTimeIdx, refTimeIdx);
+    const allOverlapRowsAligned = alignedRows.length === minRows;
+    let timeMatch = webData.data.length === refData.data.length && alignedRows.length === webData.data.length;
     let timeOffset: number | undefined;
-    if (minRows > 0) {
-      timeOffset = webData.data[0][webTimeIdx] - refData.data[0][refTimeIdx];
+    if (alignedRows.length > 0) {
+      timeOffset = alignedRows[0].webRow[webTimeIdx] - alignedRows[0].refRow[refTimeIdx];
     }
 
-    // Check time grid alignment for overlapping rows
-    let timeGridMatches = true;
-    for (let i = 0; i < minRows; i++) {
-      const wt = webData.data[i][webTimeIdx];
-      const rt = refData.data[i][refTimeIdx];
-      if (Math.abs(wt - rt) > TIME_TOL) {
-        timeGridMatches = false;
-        break;
-      }
-    }
+    const timeGridMatches = allOverlapRowsAligned;
 
     let overlapMatch = false;
 
     // For steady-state models, if time grid matches and values match in overlap, accept as PASS
     if (isSteadyStateRowMismatch && timeGridMatches) {
-      const overlapRows = minRows;
+      const overlapRows = alignedRows.length;
       let valuesMatchInOverlap = true;
       let maxOverlapRelError = 0;
 
-      for (let i = 0; i < overlapRows && valuesMatchInOverlap; i++) {
-        const webRow = webData.data[i];
-        const refRow = refData.data[i];
+      for (const { webRow, refRow } of alignedRows) {
+        if (!valuesMatchInOverlap) break;
 
         for (let ci = 0; ci < webData.headers.length; ci++) {
           const colName = webData.headers[ci];
@@ -773,13 +811,12 @@ function getMultiPhaseReference(
       // If time grids match for the overlapping rows and values are within tolerance,
       // accept overlap-only comparisons (e.g., web trims early phases).
       if (!timeMatch && timeGridMatches && webData.data.length !== refData.data.length) {
-        const overlapRows = minRows;
+        const overlapRows = alignedRows.length;
         let valuesMatchInOverlap = true;
         let maxOverlapRelError = 0;
 
-        for (let i = 0; i < overlapRows && valuesMatchInOverlap; i++) {
-          const webRow = webData.data[i];
-          const refRow = refData.data[i];
+        for (const { webRow, refRow } of alignedRows) {
+          if (!valuesMatchInOverlap) break;
 
           for (let ci = 0; ci < webData.headers.length; ci++) {
             const colName = webData.headers[ci];
@@ -814,10 +851,7 @@ function getMultiPhaseReference(
       }
     }
 
-    for (let rowIdx = 0; rowIdx < minRows; rowIdx++) {
-      const webRow = webData.data[rowIdx];
-      const refRow = refData.data[rowIdx];
-      const webTime = webRow[webTimeIdx];
+    for (const { webRow, refRow, time: webTime } of alignedRows) {
 
       for (let ci = 0; ci < webData.headers.length; ci++) {
         const colName = webData.headers[ci];

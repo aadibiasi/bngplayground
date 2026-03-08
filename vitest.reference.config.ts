@@ -8,11 +8,10 @@ export default defineConfig({
     },
   },
   test: {
-    // Mirror BioNetGen's curated validation style:
-    // run only reference-comparison suites against known fixtures/tools.
+    // Native parity suites that still invoke BNG2.pl directly or validate WASM loading.
+    // Direct web_output-vs-fixture GDAT comparison now lives in `npm run test:reference`.
     include: [
       'tests/bng2-comparison.spec.ts',
-      'tests/gdat-regression.spec.ts',
       'tests/nauty-canonicalization.spec.ts',
     ],
     exclude: [

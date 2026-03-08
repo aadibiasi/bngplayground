@@ -254,7 +254,6 @@ The following are gitignored and should be considered temporary/debug:
 
 ### Automated Validation
 - `tests/bng2-comparison.spec.ts` - Compares GDAT output vs BNG2.pl for 62 models
-- `tests/gdat-regression.spec.ts` - Regression tests against stored fixtures
 - Model-specific tolerance overrides for known numerical divergence (e.g., `An_2009` at 25% rel tol)
 
 ## Architecture Notes

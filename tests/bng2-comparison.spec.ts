@@ -20,7 +20,7 @@ import { BNG2_PARSE_AND_ODE_VERIFIED_MODELS } from '../constants';
 const thisDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(thisDir, '..');
 
-const BNG2_PATH = paths.bng2pl || process.env.BNG2_PATH;
+const BNG2_PATH = paths.bng2pl ?? process.env.BNG2_PATH ?? '';
 const PERL_CMD = process.env.PERL_CMD ?? 'perl';
 
 const bngAvailable = hasBNG2();
@@ -33,7 +33,6 @@ const bngAvailable = hasBNG2();
  * 2. Runs the web simulator with the same model
  * 3. Compares the results
  */
-describe.skipIf(!hasBNG2())('BNG2 Comparison Tests', () => {
 
 // Tolerance settings
 // (Overridden below for strict alignment)

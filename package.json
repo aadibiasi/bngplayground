@@ -18,7 +18,8 @@
     "test:fast": "vitest --run --config vitest.config.ts",
     "test:watch": "vitest",
     "test:full": "vitest --run --config vitest.full.config.ts",
-    "test:reference": "vitest --run --config vitest.reference.config.ts",
+    "test:reference": "tsx tools/validation/compare_outputs.ts",
+    "test:native-parity": "vitest --run --config vitest.reference.config.ts",
     "test:deterministic:parity": "node scripts/run_deterministic_parity_ci.mjs",
     "test:file": "vitest --run",
     "generate:gdat": "node tools/build/generateGdat.mjs",
@@ -104,5 +105,8 @@
     "util": "^0.12.5",
     "vite": "^7.3.1",
     "vitest": "^4.0.8"
+  },
+  "overrides": {
+    "dompurify": "^3.3.2"
   }
 }

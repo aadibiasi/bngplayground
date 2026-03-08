@@ -976,14 +976,16 @@ function bestMatchFile(modelKey: string, candidates: string[]): string | null {
   for (const fp of candidates) {
     const base = path.basename(fp);
     const key = normalizeKey(base);
+    const methodSuffixStripped = key.replace(/(ode|ssa|nfsim|nf)$/, '');
     let score = 0;
-    if (key.startsWith(modelKey) || modelKey.startsWith(key)) score += 500;
+    if (methodSuffixStripped === modelKey || modelKey === methodSuffixStripped) score += 900;
+    else if (key.startsWith(modelKey) || modelKey.startsWith(key)) score += 600;
     else if (key.includes(modelKey) || modelKey.includes(key)) score += 200;
     
     score -= Math.abs(key.length - modelKey.length);
     if (!best || score > best.score) best = { file: fp, score };
   }
-  if (!best || best.score < 500) return null; // Require at least a prefix/starts-with match
+  if (!best || best.score < 450) return null; // Require a strong normalized match
   return best.file;
 }
 

@@ -25,7 +25,6 @@ npx vitest run tests/*parity*.spec.ts
 These tests validate correctness against BioNetGen reference implementation:
 
 - **`bng2-comparison.spec.ts`** - ⭐ **CRITICAL** - Compares 62+ models against BNG2.pl GDAT outputs
-- **`gdat-regression.spec.ts`** - ⭐ **CRITICAL** - Regression tests against stored GDAT fixtures
 - **`nauty-canonicalization.spec.ts`** - ⭐ **CRITICAL** - Validates Nauty graph canonicalization
 
 ### Parser Tests
