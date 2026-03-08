@@ -57,6 +57,22 @@ export class JITCompiler {
     private cache: Map<string, JITCompiledFunction> = new Map();
     private maxCacheSize: number = 50;
 
+    private normalizeSpeciesIndex(
+        rawIndex: number | string,
+        nSpecies: number,
+        reactionIndex: number,
+        role: 'reactant' | 'product',
+        termIndex: number
+    ): number {
+        const normalized = typeof rawIndex === 'string' ? Number.parseInt(rawIndex, 10) : rawIndex;
+        if (!Number.isInteger(normalized) || normalized < 0 || normalized >= nSpecies) {
+            throw new Error(
+                `[JITCompiler] Invalid ${role} species index at reaction ${reactionIndex}, term ${termIndex}: ${String(rawIndex)}`
+            );
+        }
+        return normalized;
+    }
+
 
 
     /**
@@ -64,9 +80,9 @@ export class JITCompiler {
      */
     compile(
         reactions: Array<{
-            reactantIndices: number[];
+            reactantIndices: Array<number | string>;
             reactantStoich: number[];
-            productIndices: number[];
+            productIndices: Array<number | string>;
             productStoich: number[];
 
             rateConstant: number | string; // Can be number or expression
@@ -136,7 +152,7 @@ export class JITCompiler {
 
             // NOTE: BNG2 network simulations (ODE) do not implement TotalRate; treat as standard mass action.
             for (let j = 0; j < rxn.reactantIndices.length; j++) {
-                const idx = rxn.reactantIndices[j];
+                const idx = this.normalizeSpeciesIndex(rxn.reactantIndices[j], nSpecies, i, 'reactant', j);
                 const stoich = rxn.reactantStoich[j];
                 // PARITY FIX: BNG2 mass-action assumes rates are scaled by V_anchor.
                 // Reactant concentrations must be converted from native (N/Vi) to anchor-relative (N/Vanchor).
@@ -199,7 +215,7 @@ export class JITCompiler {
 
             // Subtract for reactants
             for (let j = 0; j < rxn.reactantIndices.length; j++) {
-                const idx = rxn.reactantIndices[j];
+                const idx = this.normalizeSpeciesIndex(rxn.reactantIndices[j], nSpecies, i, 'reactant', j);
                 if (isConstantSpecies(idx)) continue;
                 const stoich = rxn.reactantStoich[j];
                 if (!speciesContributions.has(idx)) {
@@ -214,7 +230,7 @@ export class JITCompiler {
 
             // Add for products
             for (let j = 0; j < rxn.productIndices.length; j++) {
-                const idx = rxn.productIndices[j];
+                const idx = this.normalizeSpeciesIndex(rxn.productIndices[j], nSpecies, i, 'product', j);
                 if (isConstantSpecies(idx)) continue;
                 const stoich = rxn.productStoich[j];
                 if (!speciesContributions.has(idx)) {
@@ -356,9 +372,9 @@ export class JITCompiler {
      */
     compileToByteCode(
         reactions: Array<{
-            reactantIndices: number[];
+            reactantIndices: Array<number | string>;
             reactantStoich: number[];
-            productIndices: number[];
+            productIndices: Array<number | string>;
             productStoich: number[];
             rateConstant: number | string;
             scalingVolume?: number;
@@ -418,7 +434,7 @@ export class JITCompiler {
                 reactantOffsets[i] = currentReactantOffset;
 
                 for (let j = 0; j < rxn.reactantIndices.length; j++) {
-                    reactantIdx[currentReactantOffset] = rxn.reactantIndices[j];
+                    reactantIdx[currentReactantOffset] = this.normalizeSpeciesIndex(rxn.reactantIndices[j], nSpecies, i, 'reactant', j);
                     reactantStoich[currentReactantOffset] = rxn.reactantStoich[j];
                     currentReactantOffset++;
                 }
@@ -431,7 +447,7 @@ export class JITCompiler {
                 const rxn = reactions[r];
                 // Reactants
                 for (let j = 0; j < rxn.reactantIndices.length; j++) {
-                    const s = rxn.reactantIndices[j];
+                    const s = this.normalizeSpeciesIndex(rxn.reactantIndices[j], nSpecies, r, 'reactant', j);
                     if (isConstant(s)) continue;
                     const st = rxn.reactantStoich[j];
                     const existing = speciesRxnEntries[s].find(e => e.rxnIdx === r);
@@ -443,7 +459,7 @@ export class JITCompiler {
                 }
                 // Products
                 for (let j = 0; j < rxn.productIndices.length; j++) {
-                    const s = rxn.productIndices[j];
+                    const s = this.normalizeSpeciesIndex(rxn.productIndices[j], nSpecies, r, 'product', j);
                     if (isConstant(s)) continue;
                     const st = rxn.productStoich[j];
                     const existing = speciesRxnEntries[s].find(e => e.rxnIdx === r);
@@ -497,7 +513,7 @@ export class JITCompiler {
                 const affectedSpecies = rxnToAffectedSpecies[r];
                 
                 for (let i_r = 0; i_r < rxn.reactantIndices.length; i_r++) {
-                    const j = rxn.reactantIndices[i_r]; // Species the rate depends on
+                    const j = this.normalizeSpeciesIndex(rxn.reactantIndices[i_r], nSpecies, r, 'reactant', i_r); // Species the rate depends on
                     const reactantStoichJ = rxn.reactantStoich[i_r];
                     
                     for (const s of affectedSpecies) {

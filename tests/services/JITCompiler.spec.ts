@@ -103,6 +103,19 @@ describe('JITCompiler Service', () => {
              compiled.evaluate(0, y, dydt);
              expect(dydt[0]).toBeCloseTo(3);
         });
+
+           it('should reject non-numeric species identifiers in low-level compile APIs', () => {
+               const rxns = [{
+                  reactantIndices: ['A'],
+                  reactantStoich: [1],
+                  productIndices: [0],
+                  productStoich: [1],
+                  rateConstant: 1
+               }];
+
+               expect(() => jitCompiler.compile(rxns as any, 1)).toThrow(/Invalid reactant species index/);
+               expect(jitCompiler.compileToByteCode(rxns as any, 1)).toBeNull();
+           });
         
         // Property / Fuzz Testing
         for (let i = 0; i < 20; i++) {

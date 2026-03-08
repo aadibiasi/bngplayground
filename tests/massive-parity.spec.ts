@@ -146,6 +146,29 @@ describe('Massive JIT/Bytecode Parity Test', () => {
 
             const { reactions, species } = fullModel;
             const nSpecies = species.length;
+            const speciesIndexMap = new Map<string, number>();
+            species.forEach((speciesEntry: any, index: number) => {
+                const speciesName = String(speciesEntry?.name ?? speciesEntry?.graph?.toString?.() ?? speciesEntry);
+                speciesIndexMap.set(speciesName, index);
+            });
+
+            const resolveSpeciesIndex = (rawIndex: number | string): number => {
+                if (typeof rawIndex === 'number' && Number.isInteger(rawIndex)) {
+                    return rawIndex;
+                }
+
+                const normalized = String(rawIndex).trim();
+                const numericIndex = Number.parseInt(normalized, 10);
+                if (Number.isInteger(numericIndex) && `${numericIndex}` === normalized) {
+                    return numericIndex;
+                }
+
+                const mapped = speciesIndexMap.get(normalized);
+                if (mapped === undefined) {
+                    throw new Error(`Unknown species reference in ${modelName}: ${normalized}`);
+                }
+                return mapped;
+            };
 
             // HARD LIMIT: skip if network is too massive to verify quickly in this test
             if (reactions.length > 2000) return;
@@ -153,9 +176,9 @@ describe('Massive JIT/Bytecode Parity Test', () => {
             // 3. JIT Compilation
             // We map from expanded network structure to JIT expectation
             const simpleRxns = reactions.map(r => ({
-                reactantIndices: r.reactants as unknown as number[],
+                reactantIndices: r.reactants.map(resolveSpeciesIndex),
                 reactantStoich: r.reactants.map(() => 1),
-                productIndices: r.products as unknown as number[],
+                productIndices: r.products.map(resolveSpeciesIndex),
                 productStoich: r.products.map((_, i) => (r as any).productStoich?.[i] ?? 1) as number[],
                 rateConstant: r.rate || 0,
                 scalingVolume: (r as any).scalingVolume || 1.0
@@ -192,7 +215,7 @@ describe('Massive JIT/Bytecode Parity Test', () => {
                 const y = new Float64Array(nSpecies).fill(1.0);
                 const dydt_js = new Float64Array(nSpecies);
                 const dydt_bc = new Float64Array(nSpecies);
-                const volumes = new Float64Array(nSpecies).fill(1.0);
+                const volumes = bytecode.speciesVolumes;
 
                 if (typeof jit.evaluate === 'function') {
                     jit.evaluate(0, y, dydt_js, volumes);
@@ -214,7 +237,6 @@ function interpretBytecode(bc: any, y: Float64Array, dydt: Float64Array) {
     const { 
         nReactions, 
         rateConstants, 
-        nReactantsPerRxn, 
         reactantOffsets, 
         reactantIdx, 
         reactantStoich,
@@ -225,27 +247,8 @@ function interpretBytecode(bc: any, y: Float64Array, dydt: Float64Array) {
         speciesVolumes
     } = bc;
 
-    for (let r = 0; r < nReactions; r++) {
-        let rate = rateConstants[r];
-        const nReactants = nReactantsPerRxn[r];
-        const offset = reactantOffsets[r];
-        
-        for (let j = 0; j < nReactants; j++) {
-            const specIdx = reactantIdx[offset + j];
-            const stoich = reactantStoich[offset + j];
-            // mass action: k * [A]^stoich
-            rate *= Math.pow(y[specIdx], stoich);
-        }
-        
-        // Scale by volume
-        rate *= scalingVolumes[r];
+    const rates = new Float64Array(nReactions);
 
-        // This is actual amount flux, now update derivatives
-        // dydt[i] = sum_r (stoich[i,r] * rate[r]) / volume[i]
-        // Handled by speciesStoich which has net stoichiometry
-    }
-
-    // More accurate way matching JIT logic:
     for (let s = 0; s < bc.nSpecies; s++) {
         let sum = 0;
         const start = speciesOffsets[s];
@@ -255,18 +258,27 @@ function interpretBytecode(bc: any, y: Float64Array, dydt: Float64Array) {
             const r = speciesRxnIdx[k];
             const netStoich = speciesStoich[k];
             
-            // Calculate rate for reaction r
-            let rate = rateConstants[r];
-            const nReactants = nReactantsPerRxn[r];
-            const rOffset = reactantOffsets[r];
-            for (let j = 0; j < nReactants; j++) {
-                const specIdx = reactantIdx[rOffset + j];
-                const stoich = reactantStoich[rOffset + j];
-                rate *= Math.pow(y[specIdx], stoich);
+            if (rates[r] === 0) {
+                let rate = rateConstants[r];
+                const rStart = reactantOffsets[r];
+                const rEnd = reactantOffsets[r + 1];
+                
+                for (let j = rStart; j < rEnd; j++) {
+                    const specIdx = reactantIdx[j];
+                    const stoich = reactantStoich[j];
+                    const scale = speciesVolumes[specIdx] / scalingVolumes[r];
+                    const conc = scale === 1 ? y[specIdx] : y[specIdx] * scale;
+                    rate *= Math.pow(conc, stoich);
+                }
+
+                if (scalingVolumes[r] !== 1) {
+                    rate *= scalingVolumes[r];
+                }
+
+                rates[r] = rate;
             }
-            rate *= scalingVolumes[r];
             
-            sum += netStoich * rate;
+            sum += netStoich * rates[r];
         }
         dydt[s] = sum / speciesVolumes[s];
     }
