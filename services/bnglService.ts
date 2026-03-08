@@ -109,11 +109,21 @@ class BnglService {
       // Handle progress/warning notifications separately and do not resolve/reject any pending promise
       const respType = type as unknown as string;
       if (respType === 'progress' || respType === 'generate_network_progress') {
+        const progressPayload = payload ?? {};
         for (const cb of this.progressListeners) {
           try {
-            cb(payload);
+            cb(progressPayload);
           } catch (e) {
             console.warn('[BnglService] progress listener error', e);
+          }
+        }
+        if (progressPayload && typeof progressPayload === 'object' && 'warning' in progressPayload) {
+          for (const cb of this.warningListeners) {
+            try {
+              cb(progressPayload);
+            } catch (e) {
+              console.warn('[BnglService] warning listener error', e);
+            }
           }
         }
         return;

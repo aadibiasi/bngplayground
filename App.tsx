@@ -25,6 +25,30 @@ import { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from 
 const normalizeCode = (value: string) => value.replace(/\r\n/g, '\n').trim();
 const SBML_IMPORT_TIMEOUT_MS = 45_000;
 
+const shouldGenerateNetworkForSimulation = (
+  model: BNGLModel,
+  method: 'ode' | 'ssa' | 'nf' | 'nfsim'
+) => {
+  if (method === 'nf' || method === 'nfsim') return false;
+  if ((model.reactions?.length ?? 0) > 0) return false;
+  return (model.reactionRules?.length ?? 0) > 0;
+};
+
+const getNetworkGenerationOptions = (model: BNGLModel) => ({
+  maxSpecies: model.networkOptions?.maxSpecies ?? 2000,
+  maxReactions: model.networkOptions?.maxReactions ?? 5000,
+  maxIterations: model.networkOptions?.maxIter ?? 1000,
+  maxAgg: model.networkOptions?.maxAgg ?? 500,
+  ...(model.networkOptions?.maxStoich !== undefined ? { maxStoich: model.networkOptions.maxStoich as any } : {}),
+});
+
+const mergeExpandedNetworkIntoModel = (model: BNGLModel, expanded: BNGLModel): BNGLModel => ({
+  ...model,
+  ...(expanded.reactions ? { reactions: expanded.reactions } : {}),
+  ...(expanded.species ? { species: expanded.species } : {}),
+  ...((expanded as any).concreteObservables ? { concreteObservables: (expanded as any).concreteObservables } : {}),
+});
+
 const findExampleById = (id?: string | null) => {
   if (!id) return undefined;
   return EXAMPLES.find((example) => example.id === id);
@@ -58,29 +82,47 @@ function App() {
 
   useEffect(() => {
     const unsub = bnglService.onProgress((payload) => {
-      if (payload.message) setGenerationProgress(payload.message);
-      if (payload.species !== undefined) {
-        setProgressStats(prev => ({ ...prev, species: payload.species }));
+      const progress = payload ?? {};
+
+      if (typeof progress.message === 'string') setGenerationProgress(progress.message);
+      if (progress.species !== undefined) {
+        setProgressStats(prev => ({ ...prev, species: progress.species }));
       }
-      if (payload.reactions !== undefined) {
-        setProgressStats(prev => ({ ...prev, reactions: payload.reactions }));
+      if (progress.reactions !== undefined) {
+        setProgressStats(prev => ({ ...prev, reactions: progress.reactions }));
       }
-      if (payload.iteration !== undefined) {
-        setProgressStats(prev => ({ ...prev, iteration: payload.iteration }));
+      if (progress.iteration !== undefined) {
+        setProgressStats(prev => ({ ...prev, iteration: progress.iteration }));
       }
-      if (payload.simulationProgress !== undefined) {
-        setSimulationProgress(payload.simulationProgress);
+      if (progress.simulationProgress !== undefined) {
+        setSimulationProgress(progress.simulationProgress);
       }
-      if (payload.simulationTime !== undefined) {
-        setSimulationTime(payload.simulationTime);
+      if (progress.simulationTime !== undefined) {
+        setSimulationTime(progress.simulationTime);
       }
-      if (payload.message && (payload.source === 'nfsim-progress' || payload.source === 'nfsim-console')) {
+      if (typeof progress.message === 'string' && (progress.source === 'nfsim-progress' || progress.source === 'nfsim-console')) {
         // Try to extract time label for display
-        const tm = payload.message.match(/(?:^|\b)Sim\s*time\s*[:=]\s*([0-9.eE+-]+)/i) ||
-          payload.message.match(/\bt\s*=\s*([0-9.eE+-]+)/i);
+        const tm = progress.message.match(/(?:^|\b)Sim\s*time\s*[:=]\s*([0-9.eE+-]+)/i) ||
+          progress.message.match(/\bt\s*=\s*([0-9.eE+-]+)/i);
         if (tm) setSimulationTimeLabel(tm[1]);
       }
     });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    const unsub = bnglService.onWarning((payload) => {
+      const warning = payload && typeof payload === 'object'
+        ? (typeof (payload as { warning?: unknown }).warning === 'string'
+          ? (payload as { warning: string }).warning
+          : typeof (payload as { message?: unknown }).message === 'string'
+            ? (payload as { message: string }).message
+            : null)
+        : null;
+
+      simulationWarningRef.current = warning;
+    });
+
     return unsub;
   }, []);
 
@@ -92,6 +134,7 @@ function App() {
   const parseAbortRef = useRef<AbortController | null>(null);
   const simulateAbortRef = useRef<AbortController | null>(null);
   const simOptionsRef = useRef<SimulationOptions | null>(null);
+  const simulationWarningRef = useRef<string | null>(null);
 
   // Editor resizing support
   const [lastResized, setLastResized] = useState<number>(Date.now());
@@ -200,6 +243,7 @@ function App() {
     }
     const controller = new AbortController();
     simulateAbortRef.current = controller;
+    simulationWarningRef.current = null;
 
     // Resolve effective method (e.g. handle 'default' -> 'nf' if model has simulate_nf)
     const effectiveMethod = resolveAutoMethod(targetModel, options.method);
@@ -207,20 +251,36 @@ function App() {
     setSimOptions(options);
     setIsSimulating(true);
     try {
-      const simResults = await bnglService.simulate(targetModel, options, {
+      let simulationModel = targetModel;
+
+      if (shouldGenerateNetworkForSimulation(targetModel, effectiveMethod)) {
+        setGenerationProgress('Generating network...');
+        const expandedModel = await bnglService.generateNetwork(targetModel, getNetworkGenerationOptions(targetModel), {
+          signal: controller.signal,
+          description: `Network generation (${effectiveMethod})`,
+        });
+        simulationModel = mergeExpandedNetworkIntoModel(targetModel, expandedModel);
+      }
+
+      const simResults = await bnglService.simulate(simulationModel, options, {
         signal: controller.signal,
         description: `Simulation (${effectiveMethod})`,
       });
       setResults(simResults);
-      setStatus({
-        type: 'success', message: (
-          <span>
-            Simulation ({effectiveMethod}) completed.&nbsp;
-            Explore: <button className="underline" onClick={() => setActiveVizTab(0)}>Time Courses</button>,{' '}
-            <button className="underline" onClick={() => setActiveVizTab(2)}>Regulatory Graph</button>
-          </span>
-        )
-      });
+      const simulationWarning = simulationWarningRef.current;
+      if (simulationWarning) {
+        setStatus({ type: 'warning', message: `Simulation (${effectiveMethod}) completed with warning: ${simulationWarning}` });
+      } else {
+        setStatus({
+          type: 'success', message: (
+            <span>
+              Simulation ({effectiveMethod}) completed.&nbsp;
+              Explore: <button className="underline" onClick={() => setActiveVizTab(0)}>Time Courses</button>,{' '}
+              <button className="underline" onClick={() => setActiveVizTab(2)}>Regulatory Graph</button>
+            </span>
+          )
+        });
+      }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         setResults(null);
@@ -319,7 +379,19 @@ function App() {
     setIsSimulating(true);
     setStatus({ type: 'info', message: 'Updating simulation for parameter change...' });
     try {
-      const simResults = await bnglService.simulate(updatedModel, options, {
+      const effectiveMethod = resolveAutoMethod(updatedModel, options.method);
+      let simulationModel = updatedModel;
+
+      if (shouldGenerateNetworkForSimulation(updatedModel, effectiveMethod)) {
+        setGenerationProgress('Generating network...');
+        const expandedModel = await bnglService.generateNetwork(updatedModel, getNetworkGenerationOptions(updatedModel), {
+          signal: controller.signal,
+          description: `Network generation (${effectiveMethod}, parameter update)`,
+        });
+        simulationModel = mergeExpandedNetworkIntoModel(updatedModel, expandedModel);
+      }
+
+      const simResults = await bnglService.simulate(simulationModel, options, {
         signal: controller.signal,
         description: 'Simulation (parameter update)',
       });

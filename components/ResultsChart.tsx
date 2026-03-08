@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceArea } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea } from 'recharts';
 import { BNGLModel, SimulationResults } from '../types';
 import { CHART_COLORS } from '../constants';
 import { Card } from './ui/Card';
@@ -18,6 +18,41 @@ interface ResultsChartProps {
   expressions?: CustomExpression[];
   isNFsim?: boolean; // Flag to indicate if this is NFsim data (counts vs concentrations)
   isSSA?: boolean;   // Flag for SSA (Gillespie)
+}
+
+export function getSelectedSimulationSlice(results: SimulationResults | null, selectedSuffix: string) {
+  if (!results) {
+    return {
+      sourceData: [] as Record<string, number>[],
+      sourceSpeciesData: undefined as Record<string, number>[] | undefined,
+      selectedResults: null as SimulationResults | null,
+    };
+  }
+
+  const sourceData = (results.dataBySuffix && results.dataBySuffix[selectedSuffix]) || results.data || [];
+  const sourceSpeciesData = (results.speciesDataBySuffix && results.speciesDataBySuffix[selectedSuffix]) || results.speciesData;
+
+  return {
+    sourceData,
+    sourceSpeciesData,
+    selectedResults: {
+      ...results,
+      data: sourceData,
+      speciesData: sourceSpeciesData,
+    },
+  };
+}
+
+export function reconcileVisibleSeries(visibleSpecies: Set<string>, availableSeries: string[]): Set<string> | null {
+  if (availableSeries.length === 0) return null;
+
+  const availableSet = new Set(availableSeries);
+  const overlapping = Array.from(visibleSpecies).filter(name => availableSet.has(name));
+  if (visibleSpecies.size === 0 || overlapping.length === 0) {
+    return new Set(availableSeries);
+  }
+
+  return null;
 }
 
 type ZoomDomain = {
@@ -250,12 +285,14 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
     setSelectedSuffix(availableSuffixes[0] || '__default__');
   }, [results, availableSuffixes]);
 
+  const { sourceData, sourceSpeciesData, selectedResults } = useMemo(
+    () => getSelectedSimulationSlice(results, selectedSuffix),
+    [results, selectedSuffix]
+  );
+
   // Compute chart data with expression values
   const chartData = useMemo(() => {
-    if (!results) return [];
-    const sourceData = (results.dataBySuffix && results.dataBySuffix[selectedSuffix]) 
-      || results.data;
-    if (!sourceData) return [];
+    if (!results || !selectedResults) return [];
     if (expressions.length === 0) return sourceData;
 
     // Pre-compute BNGL expression values (once for all time points)
@@ -276,12 +313,12 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
       }
     }
 
-    if (bnglExpressions.length > 0 && results.speciesData && results.speciesHeaders) {
+    if (bnglExpressions.length > 0 && sourceSpeciesData && results.speciesHeaders) {
       for (const expr of bnglExpressions) {
         try {
           const computed = computeDynamicObservable(
             { name: expr.name, pattern: expr.expression, type: 'molecules' },
-            results,
+            selectedResults,
             results.speciesHeaders,
             paramsMap
           );
@@ -296,7 +333,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
       console.warn('[ResultsChart] Cannot compute BNGL expressions - missing speciesData or speciesHeaders');
     }
 
-    return results.data.map((point, index) => {
+    return sourceData.map((point, index) => {
       const newPoint: Record<string, any> = { ...point };
 
       // Build variables for math expression evaluation
@@ -313,8 +350,6 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
       });
 
       // Add species concentration data if available
-      const sourceSpeciesData = (results.speciesDataBySuffix && results.speciesDataBySuffix[selectedSuffix]) 
-        || results.speciesData;
       const speciesPoint = sourceSpeciesData?.[index];
       if (speciesPoint) {
         Object.keys(speciesPoint).forEach(sName => {
@@ -337,7 +372,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
 
       return newPoint;
     });
-  }, [results, expressions, selectedSuffix]);
+  }, [results, selectedResults, sourceData, sourceSpeciesData, expressions, selectedSuffix, model]);
 
   const speciesToPlot = (results?.headers ?? []).filter(h => h !== 'time');
 
@@ -345,6 +380,13 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
     const exprKeys = expressions.map(expr => expr.name);
     return [...speciesToPlot, ...exprKeys];
   }, [speciesToPlot, expressions]);
+
+  useEffect(() => {
+    const reconciled = reconcileVisibleSeries(visibleSpecies, plotSeriesKeys);
+    if (reconciled) {
+      onVisibleSpeciesChange(reconciled);
+    }
+  }, [visibleSpecies, plotSeriesKeys, onVisibleSpeciesChange]);
 
   const plotData = useMemo(() => {
     if (!chartData || chartData.length === 0) return [];
@@ -375,7 +417,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
       });
   }, [chartData, plotSeriesKeys, xAxisScale, yAxisScale]);
 
-  if (!results || results.data.length === 0) {
+  if (!results || sourceData.length === 0) {
     return (
       <Card className="flex h-96 max-w-full items-center justify-center overflow-hidden">
         <p className="text-slate-500">Run a simulation to see the results.</p>
@@ -587,8 +629,9 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
         style={{ width: '100%', height: 500, minHeight: 500 }}
       >
         {hasValidDimensions ? (
-          <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100} debounce={50}>
           <LineChart
+            width={dimensions.width}
+            height={dimensions.height}
             data={plotData}
             margin={{ top: 10, right: 20, left: 10, bottom: chartMarginBottom }}
             onMouseDown={handleMouseDown}
@@ -684,7 +727,6 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
               />
             )}
           </LineChart>
-        </ResponsiveContainer>
         ) : (
           <div className="w-full h-full flex items-center justify-center text-slate-400">
             Initializing chart dimensions...

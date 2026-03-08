@@ -277,6 +277,23 @@ const safePostMessage = (msg: any) => {
   }
 };
 
+const forwardWorkerNotification = (jobId: number, msg: Record<string, unknown>) => {
+  const type = typeof msg.type === 'string' ? msg.type : undefined;
+
+  if ((type === 'progress' || type === 'warning') && msg.payload === undefined) {
+    const { id: _id, type: _type, ...payload } = msg;
+    safePostMessage({ id: jobId, type, payload });
+    return;
+  }
+
+  if (msg.id === undefined) {
+    safePostMessage({ ...msg, id: jobId });
+    return;
+  }
+
+  safePostMessage(msg);
+};
+
 if (typeof ctx.addEventListener === 'function') {
   ctx.addEventListener('error', (event) => {
     const payload: SerializedWorkerError = {
@@ -587,7 +604,7 @@ if (typeof ctx.addEventListener === 'function') {
               workerVerboseLog('[Worker] Using mixed-method simulation workflow');
               return await simulate(id, model, options, {
                 checkCancelled: () => ensureNotCancelled(id),
-                postMessage: (msg) => safePostMessage(msg)
+                postMessage: (msg) => forwardWorkerNotification(id, msg as Record<string, unknown>)
               });
             }
 

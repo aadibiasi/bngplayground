@@ -5,6 +5,7 @@ import { SettingsIcon } from './icons/SettingsIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { LoadingSpinner } from './ui/LoadingSpinner';
 import { SimulationOptions } from '../types';
+import { getSimulationOptionsFromParsedModel } from '@bngplayground/engine';
 
 interface SimulationControlsProps {
   onRun: (options: SimulationOptions) => void;
@@ -14,6 +15,38 @@ interface SimulationControlsProps {
   simulationMethod?: 'ode' | 'ssa' | 'nf' | 'default';
   onMethodChange?: (method: 'ode' | 'ssa' | 'nf' | 'default') => void;
   model?: any; // BNGLModel - to extract simulation phases
+}
+
+export function resolveSimulationControlDefaults(
+  model: any,
+  method: 'default' | 'ode' | 'ssa' | 'nf'
+): { tStart: string; tEnd: string; nSteps: string } {
+  const fallbackOptions = model ? getSimulationOptionsFromParsedModel(model, method) : { t_end: 100, n_steps: 100 };
+  const firstPhase = model?.simulationPhases?.[0];
+  const isMultiPhase = model?.simulationPhases && model.simulationPhases.length > 1;
+
+  const resolvedTEnd = Number.isFinite(fallbackOptions.t_end) && fallbackOptions.t_end > 0 ? fallbackOptions.t_end : 100;
+  const resolvedNSteps = Number.isFinite(fallbackOptions.n_steps) && fallbackOptions.n_steps >= 1 ? fallbackOptions.n_steps : 100;
+  const resolvedTStart = !isMultiPhase && Number.isFinite(firstPhase?.t_start) ? firstPhase.t_start : 0;
+
+  return {
+    tStart: String(resolvedTStart),
+    tEnd: String(resolvedTEnd),
+    nSteps: String(resolvedNSteps),
+  };
+}
+
+export function sanitizeSimulationControlOptions(
+  raw: { tEnd: string; nSteps: string },
+  fallback: { t_end: number; n_steps: number }
+): { t_end: number; n_steps: number } {
+  const parsedTEnd = Number(raw.tEnd);
+  const parsedNSteps = Number(raw.nSteps);
+
+  return {
+    t_end: Number.isFinite(parsedTEnd) && parsedTEnd > 0 ? parsedTEnd : fallback.t_end,
+    n_steps: Number.isFinite(parsedNSteps) && parsedNSteps >= 1 ? Math.floor(parsedNSteps) : Math.max(1, Math.floor(fallback.n_steps)),
+  };
 }
 
 export const SimulationControls: React.FC<SimulationControlsProps> = ({
@@ -40,36 +73,19 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
   const [rtol, setRtol] = useState('');
   const [includeInfluence, setIncludeInfluence] = useState(true);
 
-  // Determine if model has single or multiple phases
-  const isMultiPhase = model?.simulationPhases && model.simulationPhases.length > 1;
-  const firstPhase = model?.simulationPhases?.[0];
+  const initialDefaults = resolveSimulationControlDefaults(model, method);
 
-  // Use model's t_start/t_end for single-phase, defaults for multi-phase
-  const defaultTEnd = isMultiPhase ? '100' : (firstPhase?.t_end?.toString() || '100');
-  const defaultTStart = isMultiPhase ? '0' : (firstPhase?.t_start?.toString() || '0');
-  const defaultNSteps = isMultiPhase ? '100' : (firstPhase?.n_steps?.toString() || '100');
+  const [tEnd, setTEnd] = useState(initialDefaults.tEnd);
+  const [tStart, setTStart] = useState(initialDefaults.tStart);
+  const [nSteps, setNSteps] = useState(initialDefaults.nSteps);
 
-  const [tEnd, setTEnd] = useState(defaultTEnd);
-  const [tStart, setTStart] = useState(defaultTStart);
-  const [nSteps, setNSteps] = useState(defaultNSteps);
-
-  // Update defaults when model changes
+  // Update defaults when model or method changes
   useEffect(() => {
-    const isMulti = model?.simulationPhases && model.simulationPhases.length > 1;
-    const phase = model?.simulationPhases?.[0];
-
-    if (isMulti) {
-      // Multi-phase: use defaults
-      setTEnd('100');
-      setTStart('0');
-      setNSteps('100');
-    } else if (phase) {
-      // Single-phase: use model's values
-      setTEnd(phase.t_end?.toString() || '100');
-      setTStart(phase.t_start?.toString() || '0');
-      setNSteps(phase.n_steps?.toString() || '100');
-    }
-  }, [model]);
+    const nextDefaults = resolveSimulationControlDefaults(model, method);
+    setTEnd(nextDefaults.tEnd);
+    setTStart(nextDefaults.tStart);
+    setNSteps(nextDefaults.nSteps);
+  }, [model, method]);
 
   // NFsim-specific parameters
   const [utl, setUtl] = useState('');
@@ -93,13 +109,16 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
   }, []);
 
   const handleRun = () => {
+    const fallbackOptions = model ? getSimulationOptionsFromParsedModel(model, method) : { method, t_end: 100, n_steps: 100 } as SimulationOptions;
+    const sanitized = sanitizeSimulationControlOptions({ tEnd, nSteps }, fallbackOptions);
+
     const baseOptions: SimulationOptions = {
       method: method,
       solver: method === 'ode' ? (solver as any) : undefined,
       atol: atol ? parseFloat(atol) : undefined,
       rtol: rtol ? parseFloat(rtol) : undefined,
-      t_end: parseFloat(tEnd),
-      n_steps: parseFloat(nSteps),
+      t_end: sanitized.t_end,
+      n_steps: sanitized.n_steps,
       includeInfluence: method === 'ssa' ? includeInfluence : undefined,
     };
 
