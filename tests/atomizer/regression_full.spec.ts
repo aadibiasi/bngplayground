@@ -11,7 +11,7 @@ import { BNGLModel, SimulationOptions } from '../../types';
 import { parseBNGL } from '../../services/parseBNGL';
 import { simulate } from '@bngplayground/engine';
 import { convertBNGXmlToBNGL } from '../../src/lib/atomizer/parser/bngXmlParser';
-import { BNG2_EXCLUDED_MODELS } from '../../constants';
+import { BNG2_EXCLUDED_MODELS, NFSIM_MODELS } from '../../constants';
 import { generateExpandedNetwork } from '@bngplayground/engine';
 
 console.error(`[DEBUG-ENTRY] CWD: ${process.cwd()}`);
@@ -82,6 +82,56 @@ function parseGDAT(content: string): { headers: string[]; data: number[][] } {
     .filter(l => !l.startsWith('#') && l.trim())
     .map(line => line.trim().split(/\s+/).map(v => Number.parseFloat(v)));
   return { headers, data };
+}
+
+function stripLineComments(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .map((line) => {
+      const idx = line.indexOf('#');
+      return idx >= 0 ? line.slice(0, idx) : line;
+    })
+    .join('\n');
+}
+
+function detectSimMethod(text: string): 'ode' | 'ssa' | 'nfsim' | 'unspecified' {
+  const lower = stripLineComments(text).toLowerCase();
+  const compact = lower.replace(/\s+/g, '');
+
+  const hasSSA =
+    /simulate_ssa\s*\(/.test(lower) ||
+    compact.includes('method=>"ssa"') ||
+    compact.includes("method=>'ssa'");
+
+  const hasNF =
+    /simulate_nf\s*\(|nfsim\s*\(/.test(lower) ||
+    compact.includes('method=>"nf"') ||
+    compact.includes("method=>'nf'") ||
+    compact.includes('method=>"nfsim"') ||
+    compact.includes("method=>'nfsim'");
+
+  if (hasSSA) return 'ssa';
+  if (hasNF) return 'nfsim';
+  if (/simulate_ode\s*\(/.test(lower) || compact.includes('method=>"ode"') || compact.includes("method=>'ode'")) return 'ode';
+  return 'unspecified';
+}
+
+function getNonDeterministicSkipReason(modelKey: string, modelPath: string): string | null {
+  if (NFSIM_MODELS.has(modelKey)) {
+    return 'known_nfsim_model';
+  }
+
+  try {
+    const bnglText = readFileSync(modelPath, 'utf8');
+    const method = detectSimMethod(bnglText);
+    if (method === 'ssa' || method === 'nfsim') {
+      return `non_deterministic_method_${method}`;
+    }
+  } catch (error) {
+    console.warn('[Regression] Failed to inspect simulation method for', modelKey, error);
+  }
+
+  return null;
 }
 
 interface BnglAction {
@@ -277,9 +327,11 @@ describe('Atomizer+Simulation parity (numeric comparison) — example-models', (
   for (const modelPath of allModels) {
     const base = basename(modelPath);
     const modelKey = base.replace(/\.bngl$/i, '');
+    const nonDeterministicSkipReason = getNonDeterministicSkipReason(modelKey, modelPath);
+    const parityTest = nonDeterministicSkipReason ? it.skip : skipIfBNG2Missing;
     console.error(`[DEBUG] Registering test for: ${modelKey}`);
 
-    skipIfBNG2Missing(`${modelKey}: TS simulation matches BNG2 .gdat within tolerances`, { timeout: 6 * 60 * 1000 }, async () => {
+    parityTest(`${modelKey}: TS simulation matches BNG2 .gdat within tolerances`, { timeout: 6 * 60 * 1000 }, async () => {
       const start = Date.now();
       let runStatus: RunSummary['status'] = 'passed';
       let runReason: string | null = null;
@@ -290,6 +342,13 @@ describe('Atomizer+Simulation parity (numeric comparison) — example-models', (
       let refGdatPath: string | undefined = undefined;
 
       try {
+        if (nonDeterministicSkipReason) {
+          console.info('[Regression] Skipping deterministic GDAT parity for', modelKey, `(${nonDeterministicSkipReason})`);
+          runStatus = 'skipped';
+          runReason = nonDeterministicSkipReason;
+          return;
+        }
+
         const ok = runBNG2EnsureSBML(modelPath, temp);
         if (!ok) {
           console.warn('BNG2.pl failed for', modelPath, '- skipping');
