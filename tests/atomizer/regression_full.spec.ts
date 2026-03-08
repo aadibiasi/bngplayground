@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { resolveBNG2Paths } from '../../tools/bng2-paths';
+import { resolveBNG2Paths, resolveBNGValidateDir } from '../../tools/bng2-paths';
 import { BNGLModel, SimulationOptions } from '../../types';
 import { parseBNGL } from '../../services/parseBNGL';
 import { simulate } from '@bngplayground/engine';
@@ -17,7 +17,7 @@ import { generateExpandedNetwork } from '@bngplayground/engine';
 console.error(`[DEBUG-ENTRY] CWD: ${process.cwd()}`);
 console.error(`[DEBUG-ENTRY] example-models exists: ${fs.existsSync('example-models')}`);
 
-const VALIDATE_DIR = 'bionetgen/bng2/Validate';
+const VALIDATE_DIR = resolveBNGValidateDir();
 const BNG_OUTPUT_DIR = 'bng_test_output';
 
 const paths = resolveBNG2Paths();

@@ -2,7 +2,17 @@ import { existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 
+function findFirstExistingPath(candidates) {
+  for (const candidate of candidates) {
+    if (candidate && existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 export function resolveBNG2Paths() {
+  const ext = process.platform === 'win32' ? '.exe' : '';
   const result = {
     bng2pl: null,
     nfsim: null,
@@ -19,6 +29,15 @@ export function resolveBNG2Paths() {
   }
   if (process.env.BNGPATH && existsSync(process.env.BNGPATH)) {
     result.bngRoot = process.env.BNGPATH;
+  }
+
+  if (!result.nfsim) {
+    result.nfsim = findFirstExistingPath([
+      resolve(`nfsim/build/NFsim${ext}`),
+      resolve(`nfsim/build_native/NFsim${ext}`),
+      resolve(`nfsim/build_win/NFsim${ext}`),
+      resolve(`nfsim/bin/NFsim${ext}`),
+    ]);
   }
 
   if (!result.bngRoot) {
@@ -55,12 +74,10 @@ export function resolveBNG2Paths() {
       if (existsSync(bng2pl)) result.bng2pl = bng2pl;
     }
     if (!result.nfsim) {
-      const ext = process.platform === 'win32' ? '.exe' : '';
       const nfsim = join(result.bngRoot, 'bin', `NFsim${ext}`);
       if (existsSync(nfsim)) result.nfsim = nfsim;
     }
     if (!result.runNetwork) {
-      const ext = process.platform === 'win32' ? '.exe' : '';
       const runNetwork = join(result.bngRoot, 'bin', `run_network${ext}`);
       if (existsSync(runNetwork)) result.runNetwork = runNetwork;
     }
@@ -79,4 +96,44 @@ export function hasBNG2() {
 
 export function hasNFsim() {
   return resolveBNG2Paths().nfsim !== null;
+}
+
+export function resolveBNGValidateDir() {
+  let pythonPackageRoot = null;
+  try {
+    pythonPackageRoot = execSync(
+      'python -c "import bionetgen, os; print(os.path.dirname(bionetgen.__file__))"',
+      { encoding: 'utf-8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }
+    ).trim();
+  } catch {
+    // Ignore auto-detect failures.
+  }
+
+  const envCandidates = [
+    process.env.BNG_VALIDATE_DIR,
+    process.env.BNGPATH ? join(process.env.BNGPATH, 'Validate') : null,
+    pythonPackageRoot ? join(pythonPackageRoot, 'Validate') : null,
+    pythonPackageRoot ? join(pythonPackageRoot, 'bng2', 'Validate') : null,
+  ].filter(Boolean);
+
+  for (const candidate of envCandidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  const { bngRoot } = resolveBNG2Paths();
+  if (bngRoot) {
+    const bundledValidate = join(bngRoot, 'Validate');
+    if (existsSync(bundledValidate)) {
+      return bundledValidate;
+    }
+  }
+
+  const repoValidate = resolve('bionetgen/bng2/Validate');
+  if (existsSync(repoValidate)) {
+    return repoValidate;
+  }
+
+  return null;
 }

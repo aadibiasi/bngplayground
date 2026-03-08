@@ -20,8 +20,7 @@ if (typeof window === 'undefined') {
 
 const runDerivativeTest = async () => {
     // Dynamic import to ensure mocks are in place
-    const { simulate } = await import('../services/simulation/SimulationLoop');
-    const { parseBNGLStrict } = await import('../src/parser/BNGLParserWrapper');
+    const { simulate, parseBNGLStrict } = await import('@bngplayground/engine');
 
     const modelPath = path.join(__dirname, '../public/models/Lang_2024.bngl');
     const modelContent = fs.readFileSync(modelPath, 'utf8');

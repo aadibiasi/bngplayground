@@ -5,13 +5,16 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { existsSync, readFileSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { resolve, dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseBNGL } from '../services/parseBNGL';
 import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
 import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical';
+import { resolveBNG2Paths, hasBNG2 } from '../tools/bng2-paths';
 import type { BNGLModel } from '../types';
 
 const thisDir = dirname(fileURLToPath(import.meta.url));
@@ -21,7 +24,10 @@ const formatSpeciesList = (list: string[]) => (list.length > 0 ? list.join(' + '
 
 describe('cBNGL_simple Volume Scaling', () => {
   const modelPath = resolve(projectRoot, 'published-models', 'native-tutorials', 'CBNGL', 'cBNGL_simple.bngl');
-  const netPath = resolve(projectRoot, 'bng_test_output', 'cBNGL_simple.net');
+  
+  // Use temporary directory for output to avoid hardcoded relative paths
+  const tempDir = mkdtempSync(join(tmpdir(), 'bng-test-'));
+  const netPath = resolve(tempDir, 'cBNGL_simple.net');
   
   it('should have correct volume scaling for L_R_bind reactions', async () => {
     // Parse BNGL model
@@ -205,6 +211,29 @@ describe('cBNGL_simple Volume Scaling', () => {
       console.log(`  ${name}: ${count} reactions`);
     }
     
+    // Generate reference .net file using BNG2 if available
+    if (hasBNG2()) {
+      const bngPaths = resolveBNG2Paths();
+      const bng2pl = bngPaths.bng2pl;
+      if (bng2pl) {
+        try {
+          console.log(`\nGenerating reference .net file using BNG2: ${bng2pl}`);
+          // Create a version of the model that definitely generates a network
+          const bnglWithGenerate = bnglContent + '\ngenerate_network({overwrite=>1})\n';
+          const modelFile = join(tempDir, 'model.bngl');
+          writeFileSync(modelFile, bnglWithGenerate);
+          
+          execSync(`perl "${bng2pl}" "${modelFile}"`, { 
+            cwd: tempDir,
+            stdio: 'ignore', // Keep it quiet
+            timeout: 30000 
+          });
+        } catch (err) {
+          console.error('Failed to run BNG2 for reference generation:', err);
+        }
+      }
+    }
+
     // Parse BNG2 .net file for comparison if it exists
     if (existsSync(netPath)) {
         console.log('=== BNG2 L_R_bind Reactions (from .net file) ===');
@@ -275,6 +304,17 @@ describe('cBNGL_simple Volume Scaling', () => {
       expect(enRate / ecRate).toBeCloseTo(1, 8);
       expect(ecVol / enVol).toBeCloseTo(40, 8);
       expect((enRate / enVol) / (ecRate / ecVol)).toBeCloseTo(40, 8);
+    }
+
+    // Cleanup
+    try {
+      import('node:fs').then(fs => {
+        if (fs.existsSync(tempDir)) {
+          fs.rmSync(tempDir, { recursive: true, force: true });
+        }
+      });
+    } catch {
+      // Ignore cleanup errors
     }
   });
 });

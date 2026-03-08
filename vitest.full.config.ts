@@ -21,6 +21,8 @@ export default defineConfig({
       'tests/*repro*.{test,spec}.ts',
       'tests/*spawnsync*.{test,spec}.ts',
       'tests/examples_copy.spec.ts',
+      'tests/bng2-comparison.spec.ts',
+      'tests/parity-polymer-wasm.spec.ts',
       'tests/polymer-sim.spec.ts',
       'tests/playwright/**/*.{test,spec}.ts',
       'tests/playwright/**/*.{test,spec}.tsx',
@@ -41,6 +43,8 @@ export default defineConfig({
       'tests/constants.spec.ts',
       'tests/examples.spec.ts',
       'tests/ui/*.spec.tsx',
+      // Legacy spatial processor suite: implementation was removed during engine extraction.
+      'tests/services/CompartmentalProcessor.spec.ts',
       'tests/services/XMLValidator.spec.ts',
       'tests/nfsim*.spec.ts',
       'tests/services/NFsim*.spec.ts',

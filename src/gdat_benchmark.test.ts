@@ -17,6 +17,9 @@ import type { BNGLModel, SimulationResults, SimulationPhase, ConcentrationChange
 
 import modelsList from './gdat_models.json';
 
+const GDAT_REFERENCE_DIR = path.resolve(__dirname, '..', 'gdat_comparison_output');
+const HAS_GDAT_REFERENCE_DATA = fs.existsSync(GDAT_REFERENCE_DIR);
+
 beforeAll(async () => {
   await NautyService.getInstance().init();
 });
@@ -774,7 +777,7 @@ function recomputeDerivedParameters(
   }
 }
 
-describe('GDAT Comparison: Web Simulator vs BNG2.pl', () => {
+describe.skipIf(!HAS_GDAT_REFERENCE_DATA)('GDAT Comparison: Web Simulator vs BNG2.pl', () => {
   // Include all models that have valid GDAT files, sort by simplest first
   const MODELS_TO_TEST = modelsList
     .filter(m => m.status === 'ready_for_comparison')

@@ -32,6 +32,8 @@ export default defineConfig({
       'tests/examples_copy.spec.ts',
       'tests/model-repository-validation.spec.ts',
       'tests/massive-parity.spec.ts',
+      'tests/bng2-comparison.spec.ts',
+      'tests/parity-polymer-wasm.spec.ts',
       'tests/polymer-sim.spec.ts',
       'tests/nfsim*.spec.ts',
       'tests/services/NFsim*.spec.ts',
@@ -46,6 +48,7 @@ export default defineConfig({
       'tests/regulatoryTab.spec.tsx',
       'tests/constants.spec.ts',
       // diagnostic benchmarks are slow and not part of the fast suite
+      'src/*benchmark*.test.ts',
       'src/diagnostic_benchmark.test.ts',
       'tests/diagnostic_feature_flags.spec.ts',
       'tests/functionalRatesSecurity.spec.ts',

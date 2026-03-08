@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { resolveBNG2Paths } from '../../tools/bng2-paths';
+import { resolveBNG2Paths, resolveBNGValidateDir } from '../../tools/bng2-paths';
 
 const bng2Paths = resolveBNG2Paths();
 const DEFAULT_BNG2_PATH = bng2Paths.bng2pl ?? '';
@@ -24,9 +24,13 @@ function runBNG2(modelPath: string, outdir: string): boolean {
 describe('BNG SBML -> BNGL converter (fallback)', () => {
   it('converts simple_system SBML produced by BNG2.pl into BNGL text', { timeout: 120000 }, async () => {
     const temp = mkdtempSync(join(tmpdir(), 'bng-verify-'));
-    const model = 'bionetgen/bng2/Validate/simple_system.bngl';
+    const validateDir = resolveBNGValidateDir();
+    if (!validateDir) {
+      console.warn('Validate directory not available, skipping test');
+      return;
+    }
+    const model = join(validateDir, 'simple_system.bngl');
     // Copy model into temp and run BNG2.pl from there
-    const { copyFileSync } = require('node:fs');
     copyFileSync(model, join(temp, basename(model)));
 
     // run BNG2 - use inline call with env to ensure PERL5LIB is set

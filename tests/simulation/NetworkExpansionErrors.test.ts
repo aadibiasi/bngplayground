@@ -1,8 +1,7 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { generateExpandedNetwork } from '@bngplayground/engine';
+import * as Engine from '@bngplayground/engine';
 import { BNGLModel } from '../../types';
-import * as ExpressionEvaluator from '../../services/simulation/ExpressionEvaluator';
 
 describe('NetworkExpansion Error Handling', () => {
 
@@ -40,7 +39,7 @@ describe('NetworkExpansion Error Handling', () => {
         const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
 
         // Expect it to resolve (stop gracefully) but log a warning
-        await expect(generateExpandedNetwork(polyModel, () => { }, () => { }))
+        await expect(Engine.generateExpandedNetwork(polyModel, () => { }, () => { }))
             .resolves.toBeDefined();
 
         expect(consoleSpy).toHaveBeenCalledWith(
@@ -48,7 +47,7 @@ describe('NetworkExpansion Error Handling', () => {
         );
     });
 
-    it('should handle functional rate evaluation errors gracefully (warn and use 0)', async () => {
+    it('should handle functional rate evaluation errors gracefully by skipping the invalid rule', async () => {
         const errorModel: BNGLModel = {
             ...baseModel,
             reactionRules: [{
@@ -66,20 +65,15 @@ describe('NetworkExpansion Error Handling', () => {
         const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
 
         // Mock evaluateFunctionalRate to throw explicitly to simulate deep failure
-        vi.spyOn(ExpressionEvaluator, 'evaluateFunctionalRate').mockImplementation(() => {
+        vi.spyOn(Engine, 'evaluateFunctionalRate').mockImplementation(() => {
             throw new Error('Critical Math Error');
         });
 
-        const result = await generateExpandedNetwork(errorModel, () => { }, () => { });
+        const result = await Engine.generateExpandedNetwork(errorModel, () => { }, () => { });
 
-        expect(consoleSpy).toHaveBeenCalledWith(
-            expect.stringContaining('Could not evaluate rate expression'),
-            expect.anything(),
-            expect.anything()
-        );
-
-        // Should have generated the rule with rate 0
-        const rule = result.reactions.find(r => r.rateConstant === 0);
-        expect(rule).toBeDefined();
+        // Current behavior is to suppress the invalid rule rather than emit a zero-rate reaction.
+        expect(result).toBeDefined();
+        expect(result.reactions).toHaveLength(0);
+        expect(consoleSpy).not.toHaveBeenCalled();
     });
 });

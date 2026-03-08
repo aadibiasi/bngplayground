@@ -3,18 +3,21 @@ import { mkdtempSync, copyFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { resolveBNG2Paths } from '../../tools/bng2-paths';
+import { resolveBNG2Paths, resolveBNGValidateDir } from '../../tools/bng2-paths';
 
 const bng2Paths = resolveBNG2Paths();
 const DEFAULT_BNG2_PATH = bng2Paths.bng2pl ?? '';
 const DEFAULT_PERL5LIB = bng2Paths.perl5lib ?? '';
 const DEFAULT_PERL_CMD = process.env.PERL_CMD ?? 'perl';
 
-const MODELS = [
-  'bionetgen/bng2/Validate/simple_system.bngl',
-  'bionetgen/bng2/Validate/test_sbml_flat.bngl',
-  'bionetgen/bng2/Validate/test_sbml_structured.bngl'
-];
+const VALIDATE_DIR = resolveBNGValidateDir();
+const MODELS = VALIDATE_DIR
+  ? [
+      join(VALIDATE_DIR, 'simple_system.bngl'),
+      join(VALIDATE_DIR, 'test_sbml_flat.bngl'),
+      join(VALIDATE_DIR, 'test_sbml_structured.bngl')
+    ]
+  : [];
 
 function normalizeBNGL(s: string): string {
   return s.replace(/\r\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
@@ -45,7 +48,7 @@ function runBNG2(bnglPath: string, tempDir: string): boolean {
   return existsSync(join(tempDir, xmlName));
 }
 
-describe('Bionetgen BNGL -> SBML -> Atomizer verification (local, no commit)', () => {
+describe.skipIf(!VALIDATE_DIR)('Bionetgen BNGL -> SBML -> Atomizer verification (local, no commit)', () => {
   for (const model of MODELS) {
     it(`${basename(model)} -> atomize`, { timeout: 120000 }, async () => {
       const tempDir = mkdtempSync(join(tmpdir(), 'bng-verify-'));

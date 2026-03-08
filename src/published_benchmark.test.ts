@@ -8,9 +8,16 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 
-import { parseBNGLStrict, NetworkGenerator, NautyService, BNGLParser } from '@bngplayground/engine';
+import { parseBNGLStrict, NetworkGenerator, NautyService, BNGLParser, BNGXMLWriter } from '@bngplayground/engine';
+import { resolveBNG2Paths, hasBNG2 as checkHasBNG2 } from '../tools/bng2-paths';
+
+const bngPaths = resolveBNG2Paths();
+const BNG2_PATH = bngPaths.bng2pl ?? process.env.BNG2_PATH ?? '';
+const NFSIM_PATH = bngPaths.nfsim ?? process.env.NFSIM_PATH ?? '';
+const hasBNG2 = checkHasBNG2();
+const hasNFsim = !!NFSIM_PATH;
 
 interface BenchmarkResult {
     model: string;
@@ -30,14 +37,69 @@ interface BenchmarkResult {
 
 const results: BenchmarkResult[] = [];
 
-// BNG2.pl path for pre-check
-const BNG2_PATH = 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
+function isNFsimModel(parsedModel: ReturnType<typeof parseBNGLStrict>): boolean {
+    return (parsedModel.simulationPhases || []).some((phase) => phase.method === 'nf') ||
+        (parsedModel.actions || []).some((action) => action.type === 'simulate' && String(action.args?.method ?? '').toLowerCase() === 'nf');
+}
+
+function runNativeNFsim(modelName: string, parsedModel: ReturnType<typeof parseBNGLStrict>, tempDir: string): number {
+    if (!hasNFsim) {
+        throw new Error('NFsim binary not available');
+    }
+
+    const nfPhase = (parsedModel.simulationPhases || []).find((phase) => phase.method === 'nf');
+    const xmlPath = path.join(tempDir, `${modelName}.xml`);
+    const gdatPath = path.join(tempDir, `${modelName}.gdat`);
+    const speciesPath = path.join(tempDir, `${modelName}.species`);
+    const xml = BNGXMLWriter.write(parsedModel);
+    fs.writeFileSync(xmlPath, xml);
+
+    const hasSpeciesObservables = (parsedModel.observables || [])
+        .some((obs) => String(obs.type ?? '').toLowerCase() === 'species');
+
+    const args = [
+        '-xml', xmlPath,
+        '-sim', String(nfPhase?.t_end ?? 100),
+        '-oSteps', String(nfPhase?.n_steps ?? 100),
+        '-o', gdatPath,
+    ];
+
+    if (hasSpeciesObservables) {
+        args.push('-cb', '-ss', speciesPath);
+    }
+
+    const start = Date.now();
+    const proc = spawnSync(NFSIM_PATH, args, {
+        cwd: tempDir,
+        timeout: 120000,
+        encoding: 'utf-8'
+    });
+    const elapsedMs = Date.now() - start;
+
+    if (proc.status !== 0) {
+        const output = `${proc.stdout || ''}\n${proc.stderr || ''}`.trim();
+        throw new Error(output || `NFsim exited with status ${proc.status}`);
+    }
+
+    if (!fs.existsSync(gdatPath)) {
+        throw new Error('NFsim completed without producing GDAT output');
+    }
+
+    try { fs.rmSync(xmlPath); } catch (e) { }
+    try { fs.rmSync(gdatPath); } catch (e) { }
+    try { fs.rmSync(speciesPath); } catch (e) { }
+
+    return elapsedMs;
+}
 
 /**
  * Check if a model can be parsed by BNG2.pl
  * Returns { success: boolean, error?: string }
  */
 function checkBNG2Parse(modelPath: string, tempDir: string): { success: boolean; error?: string } {
+    if (!hasBNG2) {
+        return { success: false, error: 'BNG2.pl not available' };
+    }
     try {
         const modelName = path.basename(modelPath, '.bngl');
         const testFile = path.join(tempDir, `${modelName}_check.bngl`);
@@ -128,7 +190,14 @@ const SLOW_MODELS = new Set([
     'BLBR',
 ]);
 
-describe('Full Published Models Benchmark', () => {
+const MODEL_FILTER = new Set(
+    String(process.env.PUBLISHED_BENCHMARK_MODELS ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+);
+
+describe.skipIf(!hasBNG2)('Full Published Models Benchmark', () => {
     // Debug logging
     console.log('STARTING BENCHMARK SUITE');
 
@@ -142,7 +211,7 @@ describe('Full Published Models Benchmark', () => {
     const publishedModelsDir = path.join(projectRoot, 'published-models');
     const tempDir = path.join(projectRoot, 'temp_bench');
     // Using detected BNG2 path
-    const bng2Path = 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
+    const bng2Path = BNG2_PATH;
 
     // Ensure temp dir exists
     if (!fs.existsSync(tempDir)) {
@@ -203,15 +272,22 @@ describe('Full Published Models Benchmark', () => {
         models.push({ name: "DUMMY", path: "dummy.bngl", category: "none" });
     }
 
+    const filteredModels = MODEL_FILTER.size > 0
+        ? models.filter((model) => MODEL_FILTER.has(model.name))
+        : models;
+
     // Debug logging
     console.log(`Found ${models.length} models total across all directories.`);
+    if (MODEL_FILTER.size > 0) {
+        console.log(`Applying benchmark model filter: ${Array.from(MODEL_FILTER).join(', ')}`);
+    }
 
     it('Environment Check', () => {
-        expect(models.length).toBeGreaterThan(0);
+        expect(filteredModels.length).toBeGreaterThan(0);
     });
 
-    const normalModels = models.filter(m => !SLOW_MODELS.has(m.name));
-    const slowModels = models.filter(m => SLOW_MODELS.has(m.name));
+    const normalModels = filteredModels.filter(m => !SLOW_MODELS.has(m.name));
+    const slowModels = filteredModels.filter(m => SLOW_MODELS.has(m.name));
 
     const runBenchmarkForModel = async (modelData: { name: string; path: string; category: string }) => {
         const result: BenchmarkResult = {
@@ -225,17 +301,37 @@ describe('Full Published Models Benchmark', () => {
 
         try {
             const bnglContent = fs.readFileSync(modelData.path, 'utf-8');
+            const parsedModel = parseBNGLStrict(bnglContent);
+            const usesNFsim = isNFsimModel(parsedModel);
 
             // Check unsupported Features
             if (SKIP_MODELS.has(modelData.name) || UNSUPPORTED_FEATURES.some(f => bnglContent.includes(f))) {
                 result.status = 'skip';
-                result.error = 'Unsupported features (e.g. simulate_nf)';
+                result.error = 'Unsupported features';
                 results.push(result);
                 console.log(`⏭ ${modelData.name}: Unsupported features (skipped)`);
                 return;
             }
 
-            // BNG2.pl pre-check: Only test models that BNG2.pl can parse
+            console.log(`Testing ${modelData.name}...`);
+
+            if (usesNFsim) {
+                if (!hasNFsim) {
+                    result.status = 'skip';
+                    result.error = 'NFsim binary not available';
+                    results.push(result);
+                    console.log(`⏭ ${modelData.name}: NFsim binary unavailable (skipped)`);
+                    return;
+                }
+
+                result.webTimeMs = runNativeNFsim(modelData.name, parsedModel, tempDir);
+                result.status = 'pass';
+                results.push(result);
+                console.log(`✓ ${modelData.name}: NFsim=${result.webTimeMs}ms [native]`);
+                return;
+            }
+
+            // BNG2.pl pre-check: Only test netgen models that BNG2.pl can parse
             const bng2Check = checkBNG2Parse(modelData.path, tempDir);
             if (!bng2Check.success) {
                 result.status = 'skip';
@@ -245,11 +341,7 @@ describe('Full Published Models Benchmark', () => {
                 return;
             }
 
-            console.log(`Testing ${modelData.name}...`);
-
             // --- Web Simulator Run ---
-            // Parse with ANTLR (Strict)
-            const parsedModel = parseBNGLStrict(bnglContent);
             const seedSpecies = parsedModel.species.map(s => BNGLParser.parseSpeciesGraph(s.name));
             const parametersMap = new Map(Object.entries(parsedModel.parameters).map(([k, v]) => [k, Number(v)]));
 
@@ -409,7 +501,7 @@ describe('Full Published Models Benchmark', () => {
         const slow = results.filter(r => r.slowDiagnosed);
 
         console.log(`Total: ${results.length}`);
-        console.log(`Passed (Web): ${passed.length}/${models.length}`);
+        console.log(`Passed (Web): ${passed.length}/${filteredModels.length}`);
         console.log(`Errors (Web): ${errors.length}`);
         console.log(`Slow/Inefficient Models: ${slow.length}`);
 

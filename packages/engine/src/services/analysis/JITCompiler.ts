@@ -290,9 +290,22 @@ export class JITCompiler {
     compileFromRxns(
         reactions: Rxn[],
         nSpecies: number,
-        _speciesIndexMap: Map<string, number>,
+        speciesIndexMap: Map<string, number>,
         parameters?: Record<string, number>
     ): JITCompiledFunction {
+        const resolveSpeciesIndex = (rawIndex: number | string): number => {
+            if (typeof rawIndex === 'number' && Number.isInteger(rawIndex)) {
+                return rawIndex;
+            }
+
+            const normalized = String(rawIndex).trim();
+            const mappedIndex = speciesIndexMap.get(normalized);
+            if (mappedIndex === undefined) {
+                throw new Error(`[JITCompiler] Unknown species reference: ${normalized}`);
+            }
+            return mappedIndex;
+        };
+
         // Convert Rxn to simpler format
         const simpleReactions = reactions.map(rxn => {
             const reactantIndices: number[] = [];
@@ -302,7 +315,8 @@ export class JITCompiler {
 
             // Process reactants
             const reactantCounts = new Map<number, number>();
-            for (const idx of rxn.reactants) {
+            for (const rawIdx of rxn.reactants as Array<number | string>) {
+                const idx = resolveSpeciesIndex(rawIdx);
                 reactantCounts.set(idx, (reactantCounts.get(idx) || 0) + 1);
             }
             for (const [idx, count] of reactantCounts) {
@@ -312,7 +326,8 @@ export class JITCompiler {
 
             // Process products
             const productCounts = new Map<number, number>();
-            for (const idx of rxn.products) {
+            for (const rawIdx of rxn.products as Array<number | string>) {
+                const idx = resolveSpeciesIndex(rawIdx);
                 productCounts.set(idx, (productCounts.get(idx) || 0) + 1);
             }
             for (const [idx, count] of productCounts) {

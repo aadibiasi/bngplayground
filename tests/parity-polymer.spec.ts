@@ -48,11 +48,13 @@ describe.skipIf(!hasNFsim())('Polymer Model Parity', () => {
         expect(xml).toContain('id="c0"');
 
         console.log('Running NFsim...');
-        const expectedGdatPath = path.join(testDir, 'polymer_nf.gdat');
-        const cmd = `"${nfsimPath}" -xml ${xmlPath} -sim 1 -oSteps 20 -o ${expectedGdatPath}`;
+        const outputFileName = 'polymer_nf.gdat';
+        const speciesFileName = 'polymer_nf.species';
+        const expectedGdatPath = path.join(testDir, outputFileName);
+        const cmd = `"${nfsimPath}" -xml "polymer.xml" -sim 1 -oSteps 20 -cb -o "${outputFileName}" -ss "${speciesFileName}"`;
 
         try {
-            execSync(cmd, { encoding: 'utf-8', stdio: 'inherit' });
+            execSync(cmd, { encoding: 'utf-8', stdio: 'inherit', cwd: testDir });
         } catch (error: any) {
             console.error('NFsim execution failed:', error.message);
             throw error;
@@ -95,13 +97,14 @@ describe.skipIf(!hasNFsim())('Polymer Model Parity', () => {
 
     it('should be parseable by BNG2.pl', () => {
         // Verify that BNG2.pl can parse this model
-        const bnglPath = path.join(testDir, 'polymer_for_bng2.bngl');
+        const bnglFileName = 'polymer_for_bng2.bngl';
+        const bnglPath = path.join(testDir, bnglFileName);
         const bnglCode = fs.readFileSync(modelPath, 'utf-8');
         fs.writeFileSync(bnglPath, bnglCode);
 
         console.log('Testing BNG2.pl compatibility...');
         try {
-            const cmd = `perl "${bng2plPath}" "${bnglPath}" --xml`;
+            const cmd = `perl "${bng2plPath}" "${bnglFileName}" --xml`;
             execSync(cmd, { encoding: 'utf-8', cwd: testDir, stdio: 'inherit', timeout: 30000 });
 
             // Check if XML was generated
