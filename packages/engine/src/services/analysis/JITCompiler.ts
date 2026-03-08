@@ -13,6 +13,22 @@
 
 import type { Rxn } from '../graph/core/Rxn';
 import { ExpressionTranslator } from '../graph/core/ExpressionTranslator';
+import jsep from 'jsep';
+
+const OP_STOP = 0xFF;
+const OP_PUSH_CONST = 1;
+const OP_PUSH_SPEC = 2;
+const OP_PUSH_OBS = 3;
+const OP_PUSH_PARAM = 4;
+const OP_ADD = 5;
+const OP_SUB = 6;
+const OP_MUL = 7;
+const OP_DIV = 8;
+const OP_POW = 9;
+const OP_NEG = 10;
+const OP_LOG = 11;
+const OP_EXP = 12;
+const OP_SQRT = 13;
 
 export interface NetworkByteCode {
     nReactions: number;
@@ -32,6 +48,16 @@ export interface NetworkByteCode {
     jacContribOffsets: Int32Array;
     jacContribRxnIdx: Int32Array;
     jacContribCoeffs: Float64Array;
+
+    // --- Functional Rate Extensions ---
+    nObservables: number;
+    obsOffsets: Int32Array;
+    obsSpeciesIdx: Int32Array;
+    obsCoeffs: Float64Array;
+
+    exprBytecodeOffsets: Int32Array;
+    exprBytecode: Uint8Array;
+    exprConstants: Float64Array;
 }
 
 /**
@@ -269,7 +295,7 @@ export class JITCompiler {
 
         let evaluate: CompiledRHS;
         try {
-             
+
             evaluate = eval(fullSource) as CompiledRHS;
         } catch (error) {
             console.error('[JITCompiler] Failed to compile RHS function:', error);
@@ -370,7 +396,7 @@ export class JITCompiler {
      * Compile a reaction network into a compact bytecode representation for WASM interpretation.
      * Returns null if any reaction uses a complex rate expression that cannot be pre-evaluated.
      */
-    compileToByteCode(
+    public compileToByteCode(
         reactions: Array<{
             reactantIndices: Array<number | string>;
             reactantStoich: number[];
@@ -379,19 +405,51 @@ export class JITCompiler {
             rateConstant: number | string;
             scalingVolume?: number;
             statisticalFactor?: number;
+            totalRate?: boolean;
         }>,
         nSpecies: number,
         parameters?: Record<string, number>,
         speciesVolumes?: Float64Array,
-        constantSpeciesMask?: boolean[]
+        constantSpeciesMask?: boolean[],
+        observables?: Array<{
+            name: string;
+            indices: Int32Array | number[];
+            coefficients: Float64Array | number[];
+        }>
     ): NetworkByteCode | null {
         const isConstant = (idx: number): boolean =>
             !!constantSpeciesMask && idx >= 0 && idx < constantSpeciesMask.length && !!constantSpeciesMask[idx];
+
         try {
+            // 1. Prepare observables
+            const nObservables = observables?.length || 0;
+            const obsOffsets = new Int32Array(nObservables + 1);
+            let totalObsEntries = 0;
+            (observables || []).forEach(obs => totalObsEntries += obs.indices.length);
+
+            const obsSpeciesIdx = new Int32Array(totalObsEntries);
+            const obsCoeffs = new Float64Array(totalObsEntries);
+
+            let currentObsOffset = 0;
+            (observables || []).forEach((obs, i) => {
+                obsOffsets[i] = currentObsOffset;
+                for (let j = 0; j < obs.indices.length; j++) {
+                    obsSpeciesIdx[currentObsOffset] = obs.indices[j];
+                    obsCoeffs[currentObsOffset] = obs.coefficients[j];
+                    currentObsOffset++;
+                }
+            });
+            obsOffsets[nObservables] = currentObsOffset;
+
             const nReactions = reactions.length;
             const rateConstants = new Float64Array(nReactions);
             const nReactantsPerRxn = new Int32Array(nReactions);
             const scalingVolumes = new Float64Array(nReactions);
+
+            // Bytecode storage
+            const exprBytecodeOffsets = new Int32Array(nReactions + 1);
+            const bytecodeChunks: Uint8Array[] = [];
+            let totalBytecodeLen = 0;
 
             let totalReactantEntries = 0;
             for (const rxn of reactions) {
@@ -405,8 +463,23 @@ export class JITCompiler {
             let currentReactantOffset = 0;
             for (let i = 0; i < nReactions; i++) {
                 const rxn = reactions[i];
-                
-                // Pre-evaluate rate constant
+
+                // Check for functional rate bytecode
+                if (typeof rxn.rateConstant === 'string' && rxn.rateConstant.includes('y[')) {
+                    const bc = this.compileExpressionToBytecode(
+                        rxn.rateConstant,
+                        parameters || {},
+                        nSpecies,
+                        (observables || []).map(o => o.name)
+                    );
+                    if (bc) {
+                        exprBytecodeOffsets[i] = totalBytecodeLen;
+                        bytecodeChunks.push(bc);
+                        totalBytecodeLen += bc.length;
+                    }
+                }
+
+                // Pre-evaluate rate constant (for mass-action part or simple constants)
                 let k: number;
                 if (typeof rxn.rateConstant === 'number') {
                     k = rxn.rateConstant;
@@ -415,7 +488,7 @@ export class JITCompiler {
                     const translated = ExpressionTranslator.translate(rxn.rateConstant.toString());
                     // Simple evaluation for parameters
                     try {
-                         
+
                         const evaluator = new Function('params', `const {${Object.keys(parameters || {}).join(',')}} = params; return ${translated};`);
                         k = evaluator(parameters || {});
                         if (isNaN(k) || !isFinite(k)) return null;
@@ -495,7 +568,7 @@ export class JITCompiler {
             // d(dydt[i])/dy[j] = sum_r (speciesStoich[i,r] * d(rate[r])/dy[j]) / speciesVolumes[i]
             // d(rate[r])/dy[j] = (rate[r] * reactantStoich[r,j]) / y[j] -- for mass action
             const jacRows = Array.from({ length: nSpecies }, () => new Map<number, { rxnIdx: number; coeff: number }[]>());
-            
+
             // Map: reaction index -> species affected (non-zero net stoichiometry)
             const rxnToAffectedSpecies: number[][] = reactions.map((_, r) => {
                 const affected: number[] = [];
@@ -511,11 +584,11 @@ export class JITCompiler {
             for (let r = 0; r < nReactions; r++) {
                 const rxn = reactions[r];
                 const affectedSpecies = rxnToAffectedSpecies[r];
-                
+
                 for (let i_r = 0; i_r < rxn.reactantIndices.length; i_r++) {
                     const j = this.normalizeSpeciesIndex(rxn.reactantIndices[i_r], nSpecies, r, 'reactant', i_r); // Species the rate depends on
                     const reactantStoichJ = rxn.reactantStoich[i_r];
-                    
+
                     for (const s of affectedSpecies) {
                         if (!jacRows[s].has(j)) {
                             jacRows[s].set(j, []);
@@ -537,7 +610,7 @@ export class JITCompiler {
 
             const jacColIdx = new Int32Array(totalJacEntries);
             const jacContribOffsets = new Int32Array(totalJacEntries + 1);
-            
+
             let totalContribEntries = 0;
             for (let i = 0; i < nSpecies; i++) {
                 const rowMap = jacRows[i];
@@ -553,11 +626,11 @@ export class JITCompiler {
             for (let i = 0; i < nSpecies; i++) {
                 const rowMap = jacRows[i];
                 const sortedCols = Array.from(rowMap.keys()).sort((a, b) => a - b);
-                
+
                 for (const j of sortedCols) {
                     jacColIdx[currentJacEntry] = j;
                     jacContribOffsets[currentJacEntry] = currentContribOffset;
-                    
+
                     const contribs = rowMap.get(j)!;
                     for (const contrib of contribs) {
                         jacContribRxnIdx[currentContribOffset] = contrib.rxnIdx;
@@ -568,6 +641,14 @@ export class JITCompiler {
                 }
             }
             jacContribOffsets[totalJacEntries] = currentContribOffset;
+
+            const exprBytecode = new Uint8Array(totalBytecodeLen);
+            let currentByteOffset = 0;
+            for (const chunk of bytecodeChunks) {
+                exprBytecode.set(chunk, currentByteOffset);
+                currentByteOffset += chunk.length;
+            }
+
 
             return {
                 nReactions,
@@ -586,7 +667,14 @@ export class JITCompiler {
                 jacColIdx,
                 jacContribOffsets,
                 jacContribRxnIdx,
-                jacContribCoeffs
+                jacContribCoeffs,
+                nObservables,
+                obsOffsets,
+                obsSpeciesIdx,
+                obsCoeffs,
+                exprBytecodeOffsets,
+                exprBytecode,
+                exprConstants: new Float64Array(0) // Not used yet
             };
         } catch (error) {
             console.error('[JITCompiler] Failed to compile bytecode:', error);
@@ -610,6 +698,81 @@ export class JITCompiler {
             size: this.cache.size,
             maxSize: this.maxCacheSize
         };
+    }
+
+    private compileExpressionToBytecode(
+        expr: string,
+        parameters: Record<string, number>,
+        nSpecies: number,
+        observableNames: string[]
+    ): Uint8Array | null {
+        try {
+            const ast = jsep(expr);
+            const bytes: number[] = [];
+
+            const walk = (node: any) => {
+                if (node.type === 'Literal') {
+                    bytes.push(OP_PUSH_CONST);
+                    const buf = new ArrayBuffer(8);
+                    new Float64Array(buf)[0] = node.value;
+                    bytes.push(...new Uint8Array(buf));
+                } else if (node.type === 'Identifier') {
+                    // 1. Check if it's a species y[N]
+                    const specMatch = node.name.match(/^y\[(\d+)\]$/);
+                    if (specMatch) {
+                        const idx = parseInt(specMatch[1], 10);
+                        bytes.push(OP_PUSH_SPEC);
+                        const buf = new ArrayBuffer(4);
+                        new Int32Array(buf)[0] = idx;
+                        bytes.push(...new Uint8Array(buf));
+                        return;
+                    }
+                    // 2. Check if it's an observable
+                    const obsIdx = observableNames.indexOf(node.name);
+                    if (obsIdx >= 0) {
+                        bytes.push(OP_PUSH_OBS);
+                        const buf = new ArrayBuffer(4);
+                        new Int32Array(buf)[0] = obsIdx;
+                        bytes.push(...new Uint8Array(buf));
+                        return;
+                    }
+                    // 3. Check if it's a parameter
+                    bytes.push(OP_PUSH_PARAM);
+                    const buf = new ArrayBuffer(4);
+                    // MOCK: find index in parameters or use 0
+                    new Int32Array(buf)[0] = 0;
+                    bytes.push(...new Uint8Array(buf));
+                } else if (node.type === 'BinaryExpression') {
+                    walk(node.left);
+                    walk(node.right);
+                    if (node.operator === '+') bytes.push(OP_ADD);
+                    else if (node.operator === '-') bytes.push(OP_SUB);
+                    else if (node.operator === '*') bytes.push(OP_MUL);
+                    else if (node.operator === '/') bytes.push(OP_DIV);
+                    else if (node.operator === '^' || node.operator === '**') bytes.push(OP_POW);
+                } else if (node.type === 'UnaryExpression' && node.operator === '-') {
+                    walk(node.argument);
+                    bytes.push(OP_NEG);
+                } else if (node.type === 'CallExpression') {
+                    node.arguments.forEach((arg: any) => walk(arg));
+                    const name = node.callee.name.toLowerCase();
+                    if (name === 'log' || name === 'ln') bytes.push(OP_LOG);
+                    else if (name === 'exp') bytes.push(OP_EXP);
+                    else if (name === 'sqrt') bytes.push(OP_SQRT);
+                    else if (name === 'pow') bytes.push(OP_POW);
+                    else throw new Error(`Unknown function: ${name}`);
+                } else {
+                    throw new Error(`Unsupported AST node: ${node.type}`);
+                }
+            };
+
+            walk(ast);
+            bytes.push(OP_STOP);
+            return new Uint8Array(bytes);
+        } catch (e) {
+            console.warn('[JITCompiler] Bytecode compilation failed:', e);
+            return null;
+        }
     }
 }
 

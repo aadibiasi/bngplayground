@@ -1,3 +1,20 @@
+// === MCP stdio transport compatibility ===
+// Set CWD to project root (Claude Desktop launches from System32)
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+process.chdir(resolve(__dirname, '..', '..', '..'));
+
+// MCP uses stdout for JSON-RPC - redirect all console output to stderr
+const _write = (msg: string) => { process.stderr.write(msg + '\n'); };
+
+console.log = (...args: any[]) => _write(args.map(String).join(' '));
+console.warn = (...args: any[]) => _write('[WARN] ' + args.map(String).join(' '));
+console.error = (...args: any[]) => _write('[ERROR] ' + args.map(String).join(' '));
+console.info = (...args: any[]) => _write(args.map(String).join(' '));
+console.debug = (...args: any[]) => _write('[DEBUG] ' + args.map(String).join(' '));
+
 import { z } from 'zod';
 import { Server, StdioServerTransport, CallToolRequestSchema, ListToolsRequestSchema } from './sdk';
 import {
@@ -8,6 +25,7 @@ import {
   parseBNGLWithANTLR,
   generateExpandedNetwork,
   simulate,
+  loadEvaluator,
   type BNGLModel,
   type BNGLMoleculeType,
   type ReactionRule,
@@ -206,7 +224,7 @@ function buildSimulationOptions(args: z.infer<typeof simulateArgsSchema> | z.inf
   };
 
   if (simulationOptions.method === 'ode' && simulationOptions.solver === undefined) {
-    simulationOptions.solver = 'rk4';
+    simulationOptions.solver = 'auto';
   }
 
   return simulationOptions;
@@ -240,8 +258,8 @@ function applyNetworkOptions<T extends { max_agents?: number; max_reactions?: nu
 async function expandModel(model: BNGLModel): Promise<BNGLModel> {
   return generateExpandedNetwork(
     model,
-    () => {},
-    () => {},
+    () => { },
+    () => { },
   );
 }
 
@@ -664,10 +682,11 @@ export async function handleSimulate(args: ToolArgs): Promise<ToolResult<Awaited
   if (parsedArgs.include_species_data !== undefined) {
     simulationOptions.includeSpeciesData = parsedArgs.include_species_data;
   }
-
+  
+  await loadEvaluator();
   const results = await simulate(0, expandedModel, simulationOptions, {
-    checkCancelled: () => {},
-    postMessage: () => {},
+    checkCancelled: () => { },
+    postMessage: () => { },
   });
   return createToolResult(results);
 }
@@ -707,13 +726,14 @@ export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<Pa
       observables[observable.name] = [];
     });
 
+    await loadEvaluator();
     for (const value of xValues) {
       const runModel = cloneExpandedModel(expandedModel);
       runModel.parameters[parsedArgs.parameter] = value;
       updateMassActionRates(runModel);
       const result = await simulate(0, runModel, simulationOptions, {
-        checkCancelled: () => {},
-        postMessage: () => {},
+        checkCancelled: () => { },
+        postMessage: () => { },
       });
       const lastPoint = result.data.at(-1) ?? {};
       Object.keys(observables).forEach((observableName) => {
@@ -736,6 +756,7 @@ export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<Pa
     observables[observable.name] = yValues.map(() => new Array(xValues.length).fill(0));
   });
 
+  await loadEvaluator();
   for (let yIndex = 0; yIndex < yValues.length; yIndex += 1) {
     for (let xIndex = 0; xIndex < xValues.length; xIndex += 1) {
       const runModel = cloneExpandedModel(expandedModel);
@@ -743,8 +764,8 @@ export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<Pa
       runModel.parameters[parsedArgs.parameter2] = yValues[yIndex];
       updateMassActionRates(runModel);
       const result = await simulate(0, runModel, simulationOptions, {
-        checkCancelled: () => {},
-        postMessage: () => {},
+        checkCancelled: () => { },
+        postMessage: () => { },
       });
       const lastPoint = result.data.at(-1) ?? {};
       Object.keys(observables).forEach((observableName) => {

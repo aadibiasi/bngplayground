@@ -317,6 +317,11 @@ export function createReducedSystem(
   transformDerivatives: (
     fullDerivatives: (y: Float64Array, dydt: Float64Array) => void
   ) => (y_r: Float64Array, dydt_r: Float64Array) => void;
+  /** Transform full Jacobian function to reduced form */
+  transformJacobian: (
+    fullJacobian: (y: Float64Array, J: Float64Array) => void,
+    columnMajor?: boolean
+  ) => (y_r: Float64Array, J_r: Float64Array) => void;
 } {
   const { laws, independentSpecies, dependentSpecies } = analysis;
   const reducedSize = independentSpecies.length;
@@ -416,6 +421,33 @@ export function createReducedSystem(
     return { A, bTotals, indepTerms, m };
   })();
 
+  // Precompute reconstruction matrix Q (N x reducedSize)
+  // y = Q * y_r + constant_offset
+  // dy/dy_r = Q
+  const Q = new Float64Array(nSpecies * reducedSize);
+  for (let j = 0; j < reducedSize; j++) {
+    // Identity part for independent species
+    Q[independentSpecies[j] + j * nSpecies] = 1;
+  }
+  if (depSystem) {
+    const { A, indepTerms, m } = depSystem;
+    for (let j = 0; j < reducedSize; j++) {
+      const indepIdx = independentSpecies[j];
+      const solverB = new Array<number>(m).fill(0);
+      for (let row = 0; row < m; row++) {
+        const term = indepTerms[row].find(t => t.idx === indepIdx);
+        if (term) solverB[row] = -term.coef;
+      }
+      const solverX = solveLinearSystem(A, solverB);
+      if (solverX) {
+        for (let row = 0; row < m; row++) {
+          const depIdx = dependentSpecies[row];
+          Q[depIdx + j * nSpecies] = solverX[row];
+        }
+      }
+    }
+  }
+
   const reconstructDependentSpecies = (y: Float64Array) => {
     if (!depSystem) {
       // Fall back to sequential reconstruction (historical behavior)
@@ -509,6 +541,62 @@ export function createReducedSystem(
         // Extract reduced derivatives
         for (let i = 0; i < reducedSize; i++) {
           dydt_r[i] = fullDydt[independentSpecies[i]];
+        }
+      };
+    },
+
+    transformJacobian(
+      fullJacobian: (y: Float64Array, J: Float64Array) => void,
+      columnMajor = true
+    ): (y_r: Float64Array, J_r: Float64Array) => void {
+      const fullY = new Float64Array(nSpecies);
+      const fullJ = new Float64Array(nSpecies * nSpecies);
+
+      return (y_r: Float64Array, J_r: Float64Array) => {
+        // Expand to full state
+        for (let i = 0; i < reducedSize; i++) {
+          fullY[independentSpecies[i]] = y_r[i];
+        }
+        reconstructDependentSpecies(fullY);
+
+        // Compute full Jacobian
+        fullJacobian(fullY, fullJ);
+
+        // Compute reduced Jacobian: Jr = P * J_full * Q
+        // Jr[i, j] = d(f_i)/d(y_r,j) = sum_m (df_i/dy_m) * (dy_m/d y_r,j)
+        // Jr[i, j] = sum_m J[I[i], m] * Q[m, j]
+        J_r.fill(0);
+
+        if (columnMajor) {
+          // Jr[i + j * reducedSize]
+          for (let j = 0; j < reducedSize; j++) {
+            for (let i = 0; i < reducedSize; i++) {
+              const rowIdxFull = independentSpecies[i];
+              let sum = 0;
+              for (let m = 0; m < nSpecies; m++) {
+                const qVal = Q[m + j * nSpecies];
+                if (qVal !== 0) {
+                  sum += fullJ[rowIdxFull + m * nSpecies] * qVal;
+                }
+              }
+              J_r[i + j * reducedSize] = sum;
+            }
+          }
+        } else {
+          // Jr[i * reducedSize + j]
+          for (let i = 0; i < reducedSize; i++) {
+            const rowIdxFull = independentSpecies[i];
+            for (let j = 0; j < reducedSize; j++) {
+              let sum = 0;
+              for (let m = 0; m < nSpecies; m++) {
+                const qVal = Q[m + j * nSpecies];
+                if (qVal !== 0) {
+                  sum += fullJ[rowIdxFull * nSpecies + m] * qVal;
+                }
+              }
+              J_r[i * reducedSize + j] = sum;
+            }
+          }
         }
       };
     }

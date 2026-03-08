@@ -164,5 +164,42 @@ describe('ConservationLaws Service', () => {
       const yRestored = system.expand(new Float64Array([11]));
       expect(yRestored[0]).toBe(0);
     });
+
+    it('should transform Jacobian correctly', () => {
+      const laws: ConservationLaw[] = [{
+        dependentSpecies: 0,
+        coefficients: new Float64Array([1, 1]),
+        total: 10,
+        description: 'A + B = 10',
+      }];
+      const analysis = {
+        laws,
+        dependentSpecies: [0],
+        independentSpecies: [1],
+        rank: 1,
+      };
+
+      const system = createReducedSystem(analysis as any, 2);
+      
+      // Full system: dA/dt = -k*A, dB/dt = k*A (Conservation A+B)
+      // J = [ -k  0 ]
+      //     [  k  0 ]
+      // In reduced system (y_r = B):
+      // A = 10 - B
+      // dB/dt = k * (10 - B)
+      // d(dB/dt)/dB = -k
+      
+      const k = 0.5;
+      const fullJacobian = (y: Float64Array, J: Float64Array) => {
+          J[0] = -k; J[2] = 0;
+          J[1] = k;  J[3] = 0;
+      }; // Column major
+
+      const reducedJacobianFn = system.transformJacobian(fullJacobian, true);
+      const Jr = new Float64Array(1);
+      reducedJacobianFn(new Float64Array([3]), Jr); // B = 3
+      
+      expect(Jr[0]).toBe(-k);
+    });
   });
 });

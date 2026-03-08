@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { validateObservablePattern, parseObservablePattern } from '../packages/engine/src/utils/dynamicObservable';
+import { validateObservablePattern, parseObservablePattern } from '../src/utils/dynamicObservable';
 
 describe('BNGL Pattern Validation - Basic Patterns', () => {
   it('should validate a simple molecule name', () => {

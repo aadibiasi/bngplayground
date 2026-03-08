@@ -178,7 +178,7 @@ function getEvaluator(override?: ExpressionEvaluator): ExpressionEvaluator | nul
   // Fallback for Node environment
   if (typeof (globalThis as any).require === 'function') {
     try {
-      const mod = (globalThis as any).require('../safeExpressionEvaluator');
+      const mod = (globalThis as any).require('../../utils/safeExpressionEvaluator');
 
       // Handle both ES module default export and CommonJS
       const SafeEvaluator = mod.SafeExpressionEvaluator || mod.default?.SafeExpressionEvaluator || mod;

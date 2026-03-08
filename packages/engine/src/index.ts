@@ -85,6 +85,8 @@ export { formatBNGL } from './utils/formatBNGL';
 export { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from './utils/paramUtils';
 export { parseObservablePattern, computeObservableValue, computeDynamicObservable, validateObservablePattern } from './utils/dynamicObservable';
 export type { DynamicObservableDefinition, ComputedObservableResult } from './utils/dynamicObservable';
+export { normalizeFilterNames, safeModelName, executeMultiPhaseSimulation, runSingleBatchItem } from './utils/batchRunner';
+export type { BatchModelDef, BatchSimulator, BatchReporter, BatchRunnerOptions } from './utils/batchRunner';
 
 // ── Optimization ────────────────────────────────────────────────────────
 export { nelderMead } from './services/optimization/nelderMead';

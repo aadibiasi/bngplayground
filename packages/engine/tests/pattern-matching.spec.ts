@@ -4,9 +4,9 @@
  * Tests for BNGL pattern matching accuracy and edge cases
  */
 import { describe, it, expect } from 'vitest';
-import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
-import { GraphMatcher } from '../packages/engine/src/services/graph/core/Matcher';
-import { countPatternMatches } from '@bngplayground/engine';
+import { BNGLParser } from '../src/services/graph/core/BNGLParser';
+import { GraphMatcher } from '../src/services/graph/core/Matcher';
+import { countPatternMatches } from '../src/services/parity/PatternMatcher';
 
 describe('Pattern Matching - Simple Patterns', () => {
   it('should match single molecule pattern', () => {

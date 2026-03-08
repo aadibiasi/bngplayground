@@ -1334,12 +1334,22 @@ export class CVODESolver {
       jacContribCoeffsPtr = m._malloc(bc.jacContribCoeffs!.length * 8);
     }
 
+    // Functional Rate Bytecode & Observables
+    const obsOffsetsPtr = m._malloc((bc.nObservables + 1) * 4);
+    const obsSpeciesIdxPtr = m._malloc(bc.obsSpeciesIdx.length * 4);
+    const obsCoeffsPtr = m._malloc(bc.obsCoeffs.length * 8);
+    const exprBytecodeOffsetsPtr = m._malloc((bc.nReactions + 1) * 4);
+    const exprBytecodePtr = m._malloc(bc.exprBytecode.length); // uint8_t
+    const exprConstantsPtr = m._malloc(bc.exprConstants.length * 8);
+
     if (!rateConstPtr || !nReactantsPtr || !reactantOffsetsPtr || !reactantIdxPtr || !reactantStoichPtr ||
       !scalingVolsPtr || !speciesOffsetsPtr || !speciesRxnIdxPtr || !speciesStoichPtr || !speciesVolsPtr ||
+      !obsOffsetsPtr || !obsSpeciesIdxPtr || !obsCoeffsPtr ||
+      !exprBytecodeOffsetsPtr || !exprBytecodePtr || !exprConstantsPtr ||
       (hasJac && (!jacRowPtrPtr || !jacColIdxPtr || !jacContribOffsetsPtr || !jacContribRxnIdxPtr || !jacContribCoeffsPtr))) {
       console.error('[CVODESolver] malloc failed for bytecode');
-      // Cleanup (basic approach)
-      [rateConstPtr, nReactantsPtr, reactantOffsetsPtr, reactantIdxPtr, reactantStoichPtr, scalingVolsPtr, speciesOffsetsPtr, speciesRxnIdxPtr, speciesStoichPtr, speciesVolsPtr, jacRowPtrPtr, jacColIdxPtr, jacContribOffsetsPtr, jacContribRxnIdxPtr, jacContribCoeffsPtr].forEach(p => p && m._free(p));
+      // Cleanup
+      [rateConstPtr, nReactantsPtr, reactantOffsetsPtr, reactantIdxPtr, reactantStoichPtr, scalingVolsPtr, speciesOffsetsPtr, speciesRxnIdxPtr, speciesStoichPtr, speciesVolsPtr, jacRowPtrPtr, jacColIdxPtr, jacContribOffsetsPtr, jacContribRxnIdxPtr, jacContribCoeffsPtr, obsOffsetsPtr, obsSpeciesIdxPtr, obsCoeffsPtr, exprBytecodeOffsetsPtr, exprBytecodePtr, exprConstantsPtr].forEach(p => p && m._free(p));
       return false;
     }
 
@@ -1363,15 +1373,24 @@ export class CVODESolver {
       m.HEAPF64.set(bc.jacContribCoeffs!, jacContribCoeffsPtr >> 3);
     }
 
-    const handle = loadNetwork(
+    new Int32Array(m.HEAPF64.buffer, obsOffsetsPtr, bc.nObservables + 1).set(bc.obsOffsets);
+    new Int32Array(m.HEAPF64.buffer, obsSpeciesIdxPtr, bc.obsSpeciesIdx.length).set(bc.obsSpeciesIdx);
+    m.HEAPF64.set(bc.obsCoeffs, obsCoeffsPtr >> 3);
+    new Int32Array(m.HEAPF64.buffer, exprBytecodeOffsetsPtr, bc.nReactions + 1).set(bc.exprBytecodeOffsets);
+    new Uint8Array(m.HEAPF64.buffer, exprBytecodePtr, bc.exprBytecode.length).set(bc.exprBytecode);
+    m.HEAPF64.set(bc.exprConstants, exprConstantsPtr >> 3);
+
+    const handle = (loadNetwork as any)(
       bc.nReactions, bc.nSpecies,
       rateConstPtr, nReactantsPtr, reactantOffsetsPtr, reactantIdxPtr, reactantStoichPtr,
       scalingVolsPtr, speciesOffsetsPtr, speciesRxnIdxPtr, speciesStoichPtr, speciesVolsPtr,
-      jacRowPtrPtr, jacColIdxPtr, jacContribOffsetsPtr, jacContribRxnIdxPtr, jacContribCoeffsPtr
+      jacRowPtrPtr, jacColIdxPtr, jacContribOffsetsPtr, jacContribRxnIdxPtr, jacContribCoeffsPtr,
+      bc.nObservables, obsOffsetsPtr, obsSpeciesIdxPtr, obsCoeffsPtr,
+      exprBytecodeOffsetsPtr, exprBytecodePtr, exprConstantsPtr
     );
 
     // Free temp pointers (C side copies to its own arrays)
-    [rateConstPtr, nReactantsPtr, reactantOffsetsPtr, reactantIdxPtr, reactantStoichPtr, scalingVolsPtr, speciesOffsetsPtr, speciesRxnIdxPtr, speciesStoichPtr, speciesVolsPtr, jacRowPtrPtr, jacColIdxPtr, jacContribOffsetsPtr, jacContribRxnIdxPtr, jacContribCoeffsPtr].forEach(p => p && m._free(p));
+    [rateConstPtr, nReactantsPtr, reactantOffsetsPtr, reactantIdxPtr, reactantStoichPtr, scalingVolsPtr, speciesOffsetsPtr, speciesRxnIdxPtr, speciesStoichPtr, speciesVolsPtr, jacRowPtrPtr, jacColIdxPtr, jacContribOffsetsPtr, jacContribRxnIdxPtr, jacContribCoeffsPtr, obsOffsetsPtr, obsSpeciesIdxPtr, obsCoeffsPtr, exprBytecodeOffsetsPtr, exprBytecodePtr, exprConstantsPtr].forEach(p => p && m._free(p));
 
     if (!handle) {
       console.warn('[CVODESolver] Failed to load native bytecode network handle; falling back to JS RHS callback.');
@@ -1440,7 +1459,9 @@ export class CVODESolver {
 
     // Try bytecode path first if available
     let bcLoaded = false;
-    if (this.networkByteCode && (m._cvode_load_network || m._load_network)) {
+    const disableBytecode = (this.options as any).disableNativeBytecode === true;
+    if (this.networkByteCode && !disableBytecode && (m._cvode_load_network || m._load_network)) {
+      // TODO: Update cwrap signatures to avoid 'any' cast when load_network signature changes
       bcLoaded = this.uploadNetworkByteCode(this.networkByteCode);
     }
 
@@ -1785,13 +1806,13 @@ class SparseODESolverWrapper {
 
   integrate(y0: Float64Array, t0: number, tEnd: number): SolverResult {
     const res = this.solver.integrate(y0, t0, tEnd, [tEnd], (_t, _y) => {
-       // Optional: capture intermediate steps if output was needed
+      // Optional: capture intermediate steps if output was needed
     });
-    
+
     return {
       success: res.success,
       t: res.t,
-      y: res.y, 
+      y: res.y,
       steps: res.steps
     };
   }

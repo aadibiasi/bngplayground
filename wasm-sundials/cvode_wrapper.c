@@ -29,7 +29,6 @@ extern void js_jac(double t, double* y, double* fy, double* Jac, int neq);
 // Root callback to JS: g(t, y_ptr, gout_ptr)
 extern void js_g(double t, double* y, double* gout);
 
-// ---- Network bytecode storage struct ----
 typedef struct {
     int nReactions;
     int nSpecies;
@@ -49,6 +48,17 @@ typedef struct {
     int* jacContribRxnIdx;
     double* jacContribCoeffs;
     double* rates_cache;
+
+    // --- Functional Rate Extensions ---
+    int nObservables;
+    int* obsOffsets;        // [nObservables+1]
+    int* obsSpeciesIdx;     // [totalObsEntries]
+    double* obsCoeffs;      // [totalObsEntries]
+    double* obs_cache;      // [nObservables]
+
+    int* exprBytecodeOffsets; // [nReactions+1]
+    uint8_t* exprBytecode;    // [totalBytecodeLength]
+    double* exprConstants;    // [totalConstantsLength]
 } NetworkByteCode;
 
 // Forward declaration of interpreter
@@ -97,6 +107,77 @@ int f_bridge(realtype t, N_Vector y, N_Vector ydot, void *user_data) {
     return 0;
 }
 
+// Bytecode evaluator
+static double evaluate_expression(NetworkByteCode* bc, int reactionIdx, double* y) {
+    if (!bc->exprBytecode || bc->exprBytecodeOffsets[reactionIdx] == bc->exprBytecodeOffsets[reactionIdx+1]) {
+        return 0.0;
+    }
+
+    double stack[64];
+    int sp = 0;
+    uint8_t* pc = bc->exprBytecode + bc->exprBytecodeOffsets[reactionIdx];
+    uint8_t* end = bc->exprBytecode + bc->exprBytecodeOffsets[reactionIdx+1];
+
+    while (pc < end) {
+        uint8_t op = *pc++;
+        if (op == 0xFF) break; // STOP
+
+        switch (op) {
+            case 1: { // PUSH_CONST
+                double val;
+                uint8_t* pval = (uint8_t*)&val;
+                for (int i = 0; i < 8; i++) pval[i] = *pc++;
+                stack[sp++] = val;
+                break;
+            }
+            case 2: { // PUSH_SPEC
+                int32_t idx;
+                uint8_t* pidx = (uint8_t*)&idx;
+                for (int i = 0; i < 4; i++) pidx[i] = *pc++;
+                stack[sp++] = y[idx];
+                break;
+            }
+            case 3: { // PUSH_OBS
+                int32_t idx;
+                uint8_t* pidx = (uint8_t*)&idx;
+                for (int i = 0; i < 4; i++) pidx[i] = *pc++;
+                stack[sp++] = bc->obs_cache[idx];
+                break;
+            }
+            case 4: { // PUSH_PARAM
+                int32_t idx;
+                uint8_t* pidx = (uint8_t*)&idx;
+                for (int i = 0; i < 4; i++) pidx[i] = *pc++;
+                stack[sp++] = bc->rateConstants[idx]; // We repurpose rateConstants for parameters here if needed
+                break;
+            }
+            case 5: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = a + b; break; }
+            case 6: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = a - b; break; }
+            case 7: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = a * b; break; }
+            case 8: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = a / b; break; }
+            case 9: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = pow(a, b); break; }
+            case 10: { stack[sp-1] = -stack[sp-1]; break; }
+            case 11: { stack[sp-1] = log(stack[sp-1]); break; }
+            case 12: { stack[sp-1] = exp(stack[sp-1]); break; }
+            case 13: { stack[sp-1] = sqrt(stack[sp-1]); break; }
+            default: return 0.0;
+        }
+    }
+    return (sp > 0) ? stack[sp-1] : 0.0;
+}
+
+// Compute all observables
+static void compute_observables(NetworkByteCode* bc, double* y) {
+    if (!bc->obs_cache) return;
+    for (int i = 0; i < bc->nObservables; i++) {
+        double sum = 0.0;
+        for (int j = bc->obsOffsets[i]; j < bc->obsOffsets[i+1]; j++) {
+            sum += bc->obsCoeffs[j] * y[bc->obsSpeciesIdx[j]];
+        }
+        bc->obs_cache[i] = sum;
+    }
+}
+
 // Bytecode interpreter core
 static void network_dydt(NetworkByteCode* bc, int neq, double* y, double* ydot) {
     // Zero output
@@ -105,7 +186,18 @@ static void network_dydt(NetworkByteCode* bc, int neq, double* y, double* ydot) 
     double* rates = bc->rates_cache;
     if (!rates) return;
 
+    // 1. Update observables
+    compute_observables(bc, y);
+
+    // 2. Compute reaction rates
     for (int r = 0; r < bc->nReactions; r++) {
+        // Check for functional rate bytecode
+        if (bc->exprBytecodeOffsets && bc->exprBytecodeOffsets[r] != bc->exprBytecodeOffsets[r+1]) {
+            rates[r] = evaluate_expression(bc, r, y);
+            continue;
+        }
+
+        // Mass Action (fallback)
         double rate = bc->rateConstants[r];
         int start = bc->reactantOffsets[r];
         int end = bc->reactantOffsets[r + 1];
@@ -751,6 +843,15 @@ void unload_network(uintptr_t handle) {
     if (bc->jacContribRxnIdx) free(bc->jacContribRxnIdx);
     if (bc->jacContribCoeffs) free(bc->jacContribCoeffs);
     if (bc->rates_cache) free(bc->rates_cache);
+
+    if (bc->obsOffsets) free(bc->obsOffsets);
+    if (bc->obsSpeciesIdx) free(bc->obsSpeciesIdx);
+    if (bc->obsCoeffs) free(bc->obsCoeffs);
+    if (bc->obs_cache) free(bc->obs_cache);
+    if (bc->exprBytecodeOffsets) free(bc->exprBytecodeOffsets);
+    if (bc->exprBytecode) free(bc->exprBytecode);
+    if (bc->exprConstants) free(bc->exprConstants);
+
     free(bc);
 }
 
@@ -770,7 +871,14 @@ uintptr_t load_network(
     int* jacColIdx,            // [totalJacEntries]
     int* jacContribOffsets,    // [totalJacEntries+1]
     int* jacContribRxnIdx,     // [totalContribEntries]
-    double* jacContribCoeffs   // [totalContribEntries]
+    double* jacContribCoeffs,  // [totalContribEntries]
+    int nObservables,
+    int* obsOffsets,           // [nObservables+1]
+    int* obsSpeciesIdx,        // [totalObsEntries]
+    double* obsCoeffs,         // [totalObsEntries]
+    int* exprBytecodeOffsets,  // [nReactions+1]
+    uint8_t* exprBytecode,     // [totalBytecodeLength]
+    double* exprConstants      // [totalConstantsLength]
 ) {
     NetworkByteCode* bc = (NetworkByteCode*)malloc(sizeof(NetworkByteCode));
     if (!bc) return 0;
@@ -837,6 +945,42 @@ uintptr_t load_network(
     }
     bc->rates_cache = (double*)malloc(nReactions * sizeof(double));
 
+    // Functional Rate Extensions
+    bc->nObservables = nObservables;
+    if (nObservables > 0) {
+        bc->obsOffsets = (int*)malloc((nObservables + 1) * sizeof(int));
+        for (int i = 0; i <= nObservables; i++) bc->obsOffsets[i] = obsOffsets[i];
+        
+        int totalObsEntries = obsOffsets[nObservables];
+        bc->obsSpeciesIdx = (int*)malloc(totalObsEntries * sizeof(int));
+        for (int i = 0; i < totalObsEntries; i++) bc->obsSpeciesIdx[i] = obsSpeciesIdx[i];
+        
+        bc->obsCoeffs = (double*)malloc(totalObsEntries * sizeof(double));
+        for (int i = 0; i < totalObsEntries; i++) bc->obsCoeffs[i] = obsCoeffs[i];
+        
+        bc->obs_cache = (double*)malloc(nObservables * sizeof(double));
+    } else {
+        bc->obsOffsets = NULL;
+        bc->obsSpeciesIdx = NULL;
+        bc->obsCoeffs = NULL;
+        bc->obs_cache = NULL;
+    }
+
+    if (exprBytecodeOffsets) {
+        bc->exprBytecodeOffsets = (int*)malloc((nReactions + 1) * sizeof(int));
+        for (int i = 0; i <= nReactions; i++) bc->exprBytecodeOffsets[i] = exprBytecodeOffsets[i];
+        
+        int totalBytecodeLength = exprBytecodeOffsets[nReactions];
+        bc->exprBytecode = (uint8_t*)malloc(totalBytecodeLength * sizeof(uint8_t));
+        for (int i = 0; i < totalBytecodeLength; i++) bc->exprBytecode[i] = exprBytecode[i];
+        
+        bc->exprConstants = NULL; // Not used yet
+    } else {
+        bc->exprBytecodeOffsets = NULL;
+        bc->exprBytecode = NULL;
+        bc->exprConstants = NULL;
+    }
+
     return (uintptr_t)bc;
 }
 
@@ -892,13 +1036,22 @@ uintptr_t cvode_load_network(
     int* jacColIdx,
     int* jacContribOffsets,
     int* jacContribRxnIdx,
-    double* jacContribCoeffs
+    double* jacContribCoeffs,
+    int nObservables,
+    int* obsOffsets,
+    int* obsSpeciesIdx,
+    double* obsCoeffs,
+    int* exprBytecodeOffsets,
+    uint8_t* exprBytecode,
+    double* exprConstants
 ) {
     return load_network(
         nReactions, nSpecies,
         rateConstants, nReactantsPerRxn, reactantOffsets, reactantIdx, reactantStoich,
         scalingVolumes, speciesOffsets, speciesRxnIdx, speciesStoich, speciesVolumes,
-        jacRowPtr, jacColIdx, jacContribOffsets, jacContribRxnIdx, jacContribCoeffs
+        jacRowPtr, jacColIdx, jacContribOffsets, jacContribRxnIdx, jacContribCoeffs,
+        nObservables, obsOffsets, obsSpeciesIdx, obsCoeffs,
+        exprBytecodeOffsets, exprBytecode, exprConstants
     );
 }
 

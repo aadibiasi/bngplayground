@@ -400,7 +400,7 @@ export async function simulate(
 
     let vAnchor = 1.0;
     let minDim = Number.POSITIVE_INFINITY;
-    
+
     const candidates = r.reactants.length > 0 ? r.reactants : r.products;
 
     candidates.forEach(speciesName => {
@@ -431,7 +431,7 @@ export async function simulate(
         }
       }
     });
-    
+
     reactionReactingVolumes[idx] = vAnchor;
   });
 
@@ -575,7 +575,7 @@ export async function simulate(
     const dataBySuffix: Record<string, Record<string, number>[]> = {};
     const speciesDataBySuffix: Record<string, Record<string, number>[]> = {};
     const includeSpeciesData = options.includeSpeciesData ?? true;
-    
+
     const getSuffixDataArray = (suffix?: string) => {
       const key = suffix ?? '__default__';
       if (!dataBySuffix[key]) dataBySuffix[key] = [];
@@ -1856,7 +1856,8 @@ export async function simulate(
         numSpecies,
         model.parameters,
         speciesVolumes,
-        constantSpeciesMask
+        constantSpeciesMask,
+        concreteObservables as any
       );
       if (bc) {
         solverOptions.networkByteCode = bc;
@@ -2156,7 +2157,7 @@ export async function simulate(
 
       const phaseAtol = phase.atol ?? userAtol;
       const phaseRtol = phase.rtol ?? userRtol;
-      
+
       const phaseSolverOptions = { ...solverOptions, atol: phaseAtol, rtol: phaseRtol, solver: solverType };
 
       let currentSolverType = solverType;
@@ -2187,9 +2188,14 @@ export async function simulate(
           phaseExpandState = reducedSystem.expand;
           phaseReductionKey = `reduced:${conservation.dependentSpecies.join(',')}`;
 
+          if (phaseSolverOptions.jacobian) {
+            phaseSolverOptions.jacobian = reducedSystem.transformJacobian(phaseSolverOptions.jacobian, true);
+          }
+          if (phaseSolverOptions.jacobianRowMajor) {
+            phaseSolverOptions.jacobianRowMajor = reducedSystem.transformJacobian(phaseSolverOptions.jacobianRowMajor, false);
+          }
+
           delete phaseSolverOptions.networkByteCode;
-          delete phaseSolverOptions.jacobian;
-          delete phaseSolverOptions.jacobianRowMajor;
 
           if (phaseSolverOptions.rootFunction && phaseSolverOptions.numRoots) {
             const fullRootFunction = phaseSolverOptions.rootFunction as (t: number, yCurrent: Float64Array, gout: Float64Array) => void;
@@ -2205,7 +2211,7 @@ export async function simulate(
           console.log(`[SimulationLoop] Using conservation-law reduced ODE system for phase ${phaseIdx}: ${numSpecies} -> ${reducedSystem.reducedSize}`);
         }
       }
-      
+
       phaseSolverOptions.solver = currentSolverType;
       // Key used to detect whether a persisted solver is compatible with this phase.
       const thisSolverKey = `${phaseAtol}:${phaseRtol}:${currentSolverType}:${phaseReductionKey}`;

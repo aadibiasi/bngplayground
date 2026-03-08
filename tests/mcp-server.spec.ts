@@ -100,7 +100,7 @@ describe('MCP server tool handlers', () => {
       'get_contact_map',
     ]));
     expect(simulateTool).toBeDefined();
-    expect(simulateTool.inputSchema.properties.solver.enum).toContain('rk4');
+    expect(simulateTool.inputSchema.properties.solver.enum).toContain('auto');
   });
 
   it('rejects invalid generate_network arguments', async () => {
@@ -148,6 +148,29 @@ describe('MCP server tool handlers', () => {
     expect(result.structuredContent.headers).toContain('A_total');
     expect(result.structuredContent.data.length).toBe(5);
     expect(result.structuredContent.speciesHeaders).toContain('A()');
+  });
+
+  it('simulates a simple model using ODE (CVODE) through the MCP tool pipeline', async () => {
+    const result = await server.handle(CallToolRequestSchema, {
+      params: {
+        name: 'simulate',
+        arguments: {
+          code: SIMPLE_BNGL,
+          method: 'ode',
+          t_end: 1,
+          n_steps: 10,
+        },
+      },
+    });
+
+    expect(result.structuredContent.headers).toContain('time');
+    expect(result.structuredContent.headers).toContain('A_total');
+    expect(result.structuredContent.data.length).toBe(11);
+    // Verify decreasing trend for A() -> 0
+    const data = result.structuredContent.data as any[];
+    const aIndex = result.structuredContent.headers.indexOf('A_total');
+    expect(data[0]['A_total']).toBe(10);
+    expect(data[10]['A_total']).toBeLessThan(10);
   });
 
   it('runs a parameter scan with reusable expanded network state', async () => {
