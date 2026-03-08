@@ -1941,6 +1941,28 @@ export async function simulate(
     const odeStart = performance.now();
     const y = new Float64Array(state);
     const conservationLawReductionEnabled = getFeatureFlags().conservationLawReduction;
+    const conservationTemplate = conservationLawReductionEnabled
+      ? findConservationLaws(concreteReactions as any, numSpecies, y, speciesHeaders)
+      : undefined;
+    const getPhaseConservationAnalysis = (): typeof conservationTemplate => {
+      if (!conservationTemplate) {
+        return undefined;
+      }
+
+      return {
+        ...conservationTemplate,
+        laws: conservationTemplate.laws.map((law) => {
+          let total = 0;
+          for (let speciesIdx = 0; speciesIdx < numSpecies; speciesIdx++) {
+            const coefficient = law.coefficients[speciesIdx];
+            if (Math.abs(coefficient) > 1e-10) {
+              total += coefficient * y[speciesIdx];
+            }
+          }
+          return total === law.total ? law : { ...law, total };
+        })
+      };
+    };
     let modelTime = 0;
     let shouldStop: boolean;
 
@@ -2156,8 +2178,8 @@ export async function simulate(
       let phaseExpandState: ((y_r: Float64Array) => Float64Array) | undefined;
       let phaseReductionKey = 'full';
 
-      if (conservationLawReductionEnabled && currentSolverType !== 'sparse' && currentSolverType !== 'sparse_implicit') {
-        const conservation = findConservationLaws(concreteReactions as any, numSpecies, y, speciesHeaders);
+      if (conservationTemplate && currentSolverType !== 'sparse' && currentSolverType !== 'sparse_implicit') {
+        const conservation = getPhaseConservationAnalysis();
         if (conservation.laws.length > 0 && conservation.independentSpecies.length > 0 && conservation.independentSpecies.length < numSpecies) {
           const reducedSystem = createReducedSystem(conservation, numSpecies);
           phaseDerivatives = reducedSystem.transformDerivatives(derivatives);
