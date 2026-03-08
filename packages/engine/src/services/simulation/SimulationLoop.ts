@@ -1806,10 +1806,7 @@ export async function simulate(
     const disableNativeBytecode =
       ((typeof process !== 'undefined') && process?.env?.BNG_DISABLE_NATIVE_BYTECODE === '1') ||
       ((options as any)?.disableNativeBytecode === true);
-    const enableNativeBytecode = !disableNativeBytecode && (
-      ((typeof process !== 'undefined') && process?.env?.BNG_ENABLE_NATIVE_BYTECODE === '1') ||
-      ((options as any)?.enableNativeBytecode === true)
-    );
+    const enableNativeBytecode = !disableNativeBytecode;
     if (enableNativeBytecode && (requestedSolverType.startsWith('cvode') || requestedSolverType === 'auto') && !hasLocalFunctions) {
       const byteCodeReactions = concreteReactions.map((r, i) => {
         const multiplicativeFactor = (r.propensityFactor ?? 1) * (r.degeneracy ?? 1);

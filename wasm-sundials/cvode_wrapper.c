@@ -53,7 +53,7 @@ typedef struct {
 
 // Forward declaration of interpreter
 static void network_dydt(NetworkByteCode* bc, int neq, double* y, double* ydot);
-static int network_jac(long int N, realtype t, N_Vector y, N_Vector fy, SUNMatrix Jac, 
+static int network_jac(realtype t, N_Vector y, N_Vector fy, SUNMatrix Jac,
                        void *user_data, N_Vector tmp1, N_Vector tmp2, N_Vector tmp3);
 
 typedef struct {
@@ -150,7 +150,7 @@ static void network_dydt(NetworkByteCode* bc, int neq, double* y, double* ydot) 
 }
 
 // Jacobian interpreter (Analytical native path)
-static int network_jac(long int N, realtype t, N_Vector y, N_Vector fy, SUNMatrix Jac, 
+static int network_jac(realtype t, N_Vector y, N_Vector fy, SUNMatrix Jac,
                        void *user_data, N_Vector tmp1, N_Vector tmp2, N_Vector tmp3) {
     CvodeWrapper* mem = (CvodeWrapper*)user_data;
     NetworkByteCode* bc = mem->network_bc;
