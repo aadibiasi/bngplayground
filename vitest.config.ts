@@ -14,7 +14,8 @@ export default defineConfig({
     include: [
       'tests/**/*.{test,spec}.{ts,tsx}',
       'src/**/*.{test,spec}.{ts,tsx}',
-      'packages/engine/tests/**/*.{test,spec}.ts'
+      'packages/engine/tests/**/*.{test,spec}.ts',
+      'packages/mcp-server/tests/**/*.{test,spec}.ts'
     ],
 
     // Exclude local debugging / reproduction specs from the default run.

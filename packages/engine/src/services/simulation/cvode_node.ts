@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
@@ -10,8 +10,20 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const require = createRequire(import.meta.url);
 
-const wasmPath = resolve(process.cwd(), 'public', 'cvode.wasm');
-const loaderPath = resolve(process.cwd(), 'services', 'cvode_loader.js');
+const getProjectRoot = () => {
+  let currentDir = __dirname;
+  while (currentDir !== resolve(currentDir, '..')) {
+    if (existsSync(resolve(currentDir, 'public', 'cvode.wasm'))) {
+      return currentDir;
+    }
+    currentDir = resolve(currentDir, '..');
+  }
+  return process.cwd(); // Fallback
+};
+
+const root = getProjectRoot();
+const wasmPath = resolve(root, 'public', 'cvode.wasm');
+const loaderPath = resolve(root, 'services', 'cvode_loader.js');
 
 let cachedLoader: CvodeLoader | null = null;
 

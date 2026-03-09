@@ -1,15 +1,13 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { generateExpandedNetwork } from '@bngplayground/engine';
-import { BNGLParser } from '@bngplayground/engine';
-import { NetworkGenerator } from '@bngplayground/engine';
-import { GraphCanonicalizer } from '@bngplayground/engine';
+import { generateExpandedNetwork, BNGLParser, NetworkGenerator, GraphCanonicalizer, SpeciesGraph } from '../src/index';
 
 // Mocks
-vi.mock('@bngplayground/engine', () => ({
+vi.mock('../src/services/graph/core/BNGLParser', () => ({
     BNGLParser: {
         parseSpeciesGraph: vi.fn(),
-        parseRxnRule: vi.fn()
+        parseRxnRule: vi.fn(),
+        evaluateExpression: vi.fn().mockImplementation((expr) => parseFloat(expr) || 0)
     }
 }));
 
@@ -18,7 +16,7 @@ const { mockGenerate } = vi.hoisted(() => ({
     mockGenerate: vi.fn()
 }));
 
-vi.mock('../../src/services/graph/NetworkGenerator', () => {
+vi.mock('../src/services/graph/NetworkGenerator', () => {
     return {
         NetworkGenerator: vi.fn().mockImplementation(function (this: any) {
             this.generate = mockGenerate;
@@ -26,19 +24,19 @@ vi.mock('../../src/services/graph/NetworkGenerator', () => {
     };
 });
 
-vi.mock('../../src/services/graph/core/Canonical', () => ({
+vi.mock('../src/services/graph/core/Canonical', () => ({
     GraphCanonicalizer: {
         canonicalize: vi.fn()
     }
 }));
 
-vi.mock('../../services/simulation/ExpressionEvaluator', () => ({
+vi.mock('../src/services/simulation/ExpressionEvaluator', () => ({
     evaluateFunctionalRate: vi.fn((expr) => parseFloat(expr) || 1),
     expandRateLawMacros: vi.fn((expr, _substr) => expr),
     containsRateLawMacro: vi.fn(() => false)
 }));
 
-import { evaluateFunctionalRate } from '@bngplayground/engine';
+import { evaluateFunctionalRate } from '../src/index';
 
 describe('NetworkExpansion Service', () => {
 
@@ -46,11 +44,27 @@ describe('NetworkExpansion Service', () => {
         vi.clearAllMocks();
 
         // Default mocks
-        vi.mocked(BNGLParser.parseSpeciesGraph).mockReturnValue({ id: 'graph' } as any);
-        vi.mocked(BNGLParser.parseRxnRule).mockReturnValue({ name: 'rule', applyConstraints: vi.fn() } as any);
-        vi.mocked(GraphCanonicalizer.canonicalize).mockImplementation((g: any) => g.id || 'canon');
+        const createMockGraph = (id: string) => {
+            const g = new SpeciesGraph();
+            (g as any).id = id;
+            return g;
+        };
+
+        vi.mocked(BNGLParser.parseSpeciesGraph).mockImplementation((name: string) => createMockGraph(name));
+        vi.mocked(BNGLParser.parseRxnRule).mockReturnValue({
+            name: 'rule',
+            reactants: [],
+            products: [],
+            applyConstraints: vi.fn()
+        } as any);
+        vi.mocked(BNGLParser.evaluateExpression).mockImplementation((expr) => parseFloat(expr) || 0);
+        vi.mocked(GraphCanonicalizer.canonicalize).mockImplementation((g: any) => (g as any).id || 'canon');
+
         mockGenerate.mockResolvedValue({
-            species: [{ graph: { id: 'A_canon' } }, { graph: { id: 'B_canon' } }],
+            species: [
+                { graph: createMockGraph('A_canon') },
+                { graph: createMockGraph('B_canon') }
+            ],
             reactions: [
                 { reactants: [0], products: [1], rate: 1, rateExpression: '1' }
             ]

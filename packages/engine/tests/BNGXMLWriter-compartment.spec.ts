@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { BNGXMLWriter } from '@bngplayground/engine';
-import type { BNGLModel } from '../../types';
+import { BNGXMLWriter, parseBNGLStrict as parseBNGL } from '../src/index';
+import type { BNGLModel } from '../src/types';
 
 describe('BNGXMLWriter - Compartment Transport', () => {
     it('generates ChangeCompartment operation for molecule transport between compartments', () => {

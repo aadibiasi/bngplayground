@@ -1,7 +1,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { simulate } from '@bngplayground/engine';
-import { BNGLModel, SimulationOptions } from '../../types';
+import { simulate } from '../src/index';
+import { BNGLModel, SimulationOptions } from '../src/types';
 
 // Mock ODESolver
 const mockIntegrate = vi.fn().mockImplementation((_times, ..._args) => {
@@ -12,13 +12,13 @@ const mockIntegrate = vi.fn().mockImplementation((_times, ..._args) => {
     // If we look at existing usage: solver.integrate(timePoints) or similar.
     // Let's return the times passed if array, or start/end.
     // To be safe, just return { times: [0, 10], ... } is what caused error because it ignores phase.
-    
+
     // Better strategy: The test #27 expects close to 10.
     // If the mock always returns 0..10, then two phases might concatenate weirdly or overwrite.
     // Let's inspect the simulate call in Phase 2.
     // If I just want the test to pass, I can make the mock result correspond to the call.
     return {
-        times: [0, 10], 
+        times: [0, 10],
         concentrations: [[100], [90]]
     };
 });
@@ -41,7 +41,7 @@ const mockCreateSolver = vi.fn().mockImplementation(() => ({
     compile: vi.fn(), // Only if webgpu
 }));
 
-vi.mock('@bngplayground/engine/src/services/simulation/ODESolver', () => ({
+vi.mock('../src/services/simulation/ODESolver', () => ({
     createSolver: (config: any) => mockCreateSolver(config)
 }));
 
@@ -82,7 +82,7 @@ describe('SimulationOptions', () => {
         // Let's rely on result or use a more robust spy if needed. 
         // For now, assume mock works.
     });
-    
+
     // 17. Run with method: "ssa"
     it('17. should use SSA path when method is "ssa"', async () => {
         // SSA is implemented directly in loop, does NOT use ODESolver
@@ -114,8 +114,8 @@ describe('SimulationOptions', () => {
 
     // 20. Run with custom rtol
     it('20. should pass custom rtol', async () => {
-         const options: SimulationOptions = { method: 'ode', t_end: 10, n_steps: 10, rtol: 1e-4 };
-         await simulate(1, baseModel, options, mockCallbacks);
+        const options: SimulationOptions = { method: 'ode', t_end: 10, n_steps: 10, rtol: 1e-4 };
+        await simulate(1, baseModel, options, mockCallbacks);
     });
 
     // 21. Run with sparse: true
@@ -132,7 +132,7 @@ describe('SimulationOptions', () => {
 
     // 23. Run with print_functions: true
     it('23. should include parameter-less functions in output', async () => {
-        baseModel.functions = [{name: 'MyFunc', args: [], expression: '100'}];
+        baseModel.functions = [{ name: 'MyFunc', args: [], expression: '100' }];
         const options: SimulationOptions = { method: 'ode', t_end: 10, n_steps: 10, print_functions: true };
         const result = await simulate(1, baseModel, options, mockCallbacks);
         expect(result.headers).toContain('MyFunc');
@@ -140,7 +140,7 @@ describe('SimulationOptions', () => {
 
     // 24. Run with print_functions: false
     it('24. should exclude functions if print_functions false', async () => {
-        baseModel.functions = [{name: 'MyFunc', args: [], expression: '100'}];
+        baseModel.functions = [{ name: 'MyFunc', args: [], expression: '100' }];
         const options: SimulationOptions = { method: 'ode', t_end: 10, n_steps: 10, print_functions: false };
         const result = await simulate(1, baseModel, options, mockCallbacks);
         expect(result.headers).not.toContain('MyFunc'); // Unless model default overrides
@@ -155,12 +155,12 @@ describe('SimulationOptions', () => {
 
     // 26. Verify data length matches n_steps (approx)
     it('26. should return correct number of points', async () => {
-       // SSA produces variable points if not gridded, but parity service Grids it?
-       // Simulate returns gridded output logic in SimulationLoop
-       const options: SimulationOptions = { method: 'ssa', t_end: 10, n_steps: 5 };
-       const result = await simulate(1, baseModel, options, mockCallbacks);
-       // n_steps 5 means 0, 2, 4, 6, 8, 10 -> 6 points depending on strictness
-       expect(result.data.length).toBeGreaterThanOrEqual(1);
+        // SSA produces variable points if not gridded, but parity service Grids it?
+        // Simulate returns gridded output logic in SimulationLoop
+        const options: SimulationOptions = { method: 'ssa', t_end: 10, n_steps: 5 };
+        const result = await simulate(1, baseModel, options, mockCallbacks);
+        // n_steps 5 means 0, 2, 4, 6, 8, 10 -> 6 points depending on strictness
+        expect(result.data.length).toBeGreaterThanOrEqual(1);
     });
 
     // 27. Verify continue: true

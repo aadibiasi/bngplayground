@@ -12,9 +12,15 @@ const splitLine = (line: string): string[] => {
 
 export function parseGdat(gdat: string): GdatData {
   const lines = gdat.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  
+
   // Look for the last line starting with #, which is usually the header in NFsim .gdat files
-  const headerLineIndex = lines.findLastIndex((l) => l.startsWith('#'));
+  let headerLineIndex = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].startsWith('#')) {
+      headerLineIndex = i;
+      break;
+    }
+  }
   let headerTokens: string[] = [];
   let dataStartIndex = 0;
 
@@ -31,7 +37,7 @@ export function parseGdat(gdat: string): GdatData {
   const looksNumeric = (token: string) => /^-?\d*(\.\d+)?([eE][+-]?\d+)?$/.test(token);
   const hasTimeHeader = headerTokens.some((t) => t.toLowerCase() === 'time');
   const allNumeric = headerTokens.length > 0 && headerTokens.every(looksNumeric);
-  
+
   const headerIsData = headerTokens.length > 0 && !hasTimeHeader && allNumeric;
 
   let headers: string[];

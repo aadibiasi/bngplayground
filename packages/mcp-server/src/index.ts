@@ -1,19 +1,25 @@
 // === MCP stdio transport compatibility ===
-// Set CWD to project root (Claude Desktop launches from System32)
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, resolve } from 'path';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-process.chdir(resolve(__dirname, '..', '..', '..'));
 
-// MCP uses stdout for JSON-RPC - redirect all console output to stderr
-const _write = (msg: string) => { process.stderr.write(msg + '\n'); };
+// Only redirect console and change CWD if running as the main script
+const isMain = import.meta.url === pathToFileURL(process.argv[1] ?? '').href || process.env.MCP_SERVER_RUN === 'true';
 
-console.log = (...args: any[]) => _write(args.map(String).join(' '));
-console.warn = (...args: any[]) => _write('[WARN] ' + args.map(String).join(' '));
-console.error = (...args: any[]) => _write('[ERROR] ' + args.map(String).join(' '));
-console.info = (...args: any[]) => _write(args.map(String).join(' '));
-console.debug = (...args: any[]) => _write('[DEBUG] ' + args.map(String).join(' '));
+if (isMain) {
+  // Set CWD to project root (Claude Desktop launches from System32)
+  process.chdir(resolve(__dirname, '..', '..', '..'));
+
+  // MCP uses stdout for JSON-RPC - redirect all console output to stderr
+  const _write = (msg: string) => { process.stderr.write(msg + '\n'); };
+  console.log = (...args: any[]) => _write(args.map(String).join(' '));
+  console.warn = (...args: any[]) => _write('[WARN] ' + args.map(String).join(' '));
+  console.error = (...args: any[]) => _write('[ERROR] ' + args.map(String).join(' '));
+  console.info = (...args: any[]) => _write(args.map(String).join(' '));
+  console.debug = (...args: any[]) => _write('[DEBUG] ' + args.map(String).join(' '));
+}
 
 import { z } from 'zod';
 import { Server, StdioServerTransport, CallToolRequestSchema, ListToolsRequestSchema } from './sdk';
@@ -1243,6 +1249,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request: { params: { name
 });
 
 // start listening (stubbed behavior for tests, stdio transport for runtime)
-server.listen?.(new StdioServerTransport());
+if (isMain) {
+  server.listen?.(new StdioServerTransport());
+}
 
 export { server };
