@@ -31,6 +31,14 @@ import {
   type ReactionRule,
   type SimulationOptions,
   validateModelForNFsim,
+  NetworkGenerationLimitError,
+  MassBalance,
+  fitParameters,
+  type FitResult,
+  type ParamBounds,
+  type ExperimentalDataPoint,
+  analyzeModelStiffness,
+  getOptimalCVODEConfig,
 } from '@bngplayground/engine';
 
 type ToolArgs = Record<string, unknown> | undefined;
@@ -168,6 +176,26 @@ const validateModelArgsSchema = z.object({
 
 const getContactMapArgsSchema = z.object({
   code: z.string(),
+}).strict();
+
+const fitParametersArgsSchema = z.object({
+  code: z.string().describe('BNGL code containing the model and observables'),
+  parameters: z.record(z.object({
+    min: z.number(),
+    max: z.number(),
+    initial: z.number().optional(),
+  })).describe('Map of parameter names to their fitting bounds { min, max, initial? }'),
+  data: z.array(z.object({
+    time: z.number(),
+    observables: z.record(z.number()),
+  })).describe('Experimental data points: list of { time, observables: { obsName: value } }'),
+  method: z.enum(['ode', 'ssa']).default('ode').describe('Simulation method to use during fitting'),
+  algorithm: z.enum(['nelder-mead', 'sbplx']).default('nelder-mead').describe('Optimization algorithm'),
+  max_iterations: z.number().optional().describe('Maximum iterations for the optimizer'),
+}).strict();
+
+const diagnoseArgsSchema = z.object({
+  code: z.string().describe('BNGL code to analyze'),
 }).strict();
 
 function createToolResult<T>(data: T): ToolResult<T> {
@@ -410,6 +438,17 @@ function validateModel(model: BNGLModel, includeNFsim: boolean): ValidateModelRe
       });
     });
   }
+
+  // P1: Semantic Mass Balance Validation
+  const massBalanceIssues = MassBalance.checkMassBalance(model);
+  massBalanceIssues.forEach((issue: { ruleName: string; issue: string; severity: 'error' | 'warning' }) => {
+    warnings.push({
+      source: 'model',
+      code: 'MASS_BALANCE_IMBALANCE',
+      severity: issue.severity,
+      message: `Rule "${issue.ruleName}": ${issue.issue}`,
+    });
+  });
 
   return {
     valid: errors.length === 0,
@@ -667,28 +706,66 @@ export async function handleParseBngl(args: ToolArgs): Promise<ToolResult<Return
   return createToolResult(result);
 }
 
-export async function handleGenerateNetwork(args: ToolArgs): Promise<ToolResult<BNGLModel>> {
+export async function handleGenerateNetwork(args: ToolArgs): Promise<ToolResult<any>> {
   const parsedArgs = parseArgs('generate_network', generateNetworkArgsSchema, args);
-  const model = applyNetworkOptions(parseModelOrThrow(parsedArgs.code), parsedArgs);
-  const expandedModel = await expandModel(model);
-  return createToolResult(expandedModel);
+  try {
+    const model = applyNetworkOptions(parseModelOrThrow(parsedArgs.code), parsedArgs);
+    const expandedModel = await expandModel(model);
+    return createToolResult(expandedModel);
+  } catch (error: any) {
+    if (error instanceof NetworkGenerationLimitError) {
+      return createToolResult({
+        success: false,
+        stage: 'network_expansion',
+        error: error.message,
+        species_generated: error.speciesCount,
+        reactions_generated: error.reactionCount,
+        last_rule: error.lastRule,
+      });
+    }
+    return createToolResult({
+      success: false,
+      stage: 'network_expansion',
+      error: error.message || 'Unknown network expansion error',
+    });
+  }
 }
 
-export async function handleSimulate(args: ToolArgs): Promise<ToolResult<Awaited<ReturnType<typeof simulate>>>> {
+export async function handleSimulate(args: ToolArgs): Promise<ToolResult<any>> {
   const parsedArgs = parseArgs('simulate', simulateArgsSchema, args);
-  const model = applyNetworkOptions(parseModelOrThrow(parsedArgs.code), parsedArgs);
-  const expandedModel = await expandModel(model);
-  const simulationOptions = buildSimulationOptions(parsedArgs);
-  if (parsedArgs.include_species_data !== undefined) {
-    simulationOptions.includeSpeciesData = parsedArgs.include_species_data;
+  try {
+    const model = applyNetworkOptions(parseModelOrThrow(parsedArgs.code), parsedArgs);
+    const expandedModel = await expandModel(model);
+    const simulationOptions = buildSimulationOptions(parsedArgs);
+    if (parsedArgs.include_species_data !== undefined) {
+      simulationOptions.includeSpeciesData = parsedArgs.include_species_data;
+    }
+
+    await loadEvaluator();
+    const results = await simulate(0, expandedModel, simulationOptions, {
+      checkCancelled: () => { },
+      postMessage: () => { },
+    });
+    return createToolResult(results);
+  } catch (error: any) {
+    let stage = 'simulation';
+    if (error instanceof NetworkGenerationLimitError) {
+      stage = 'network_expansion';
+      return createToolResult({
+        success: false,
+        stage,
+        error: error.message,
+        species_generated: error.speciesCount,
+        reactions_generated: error.reactionCount,
+        last_rule: error.lastRule,
+      });
+    }
+    return createToolResult({
+      success: false,
+      stage,
+      error: error.message || 'Unknown simulation error',
+    });
   }
-  
-  await loadEvaluator();
-  const results = await simulate(0, expandedModel, simulationOptions, {
-    checkCancelled: () => { },
-    postMessage: () => { },
-  });
-  return createToolResult(results);
 }
 
 export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<ParameterScanResult>> {
@@ -813,6 +890,104 @@ export async function handleValidateModel(args: ToolArgs): Promise<ToolResult<Va
   }
 
   return createToolResult(validateModel(parseResult.model, parsedArgs.include_nfsim ?? true));
+}
+
+export async function handleFitParameters(args: ToolArgs): Promise<ToolResult<FitResult>> {
+  const parsedArgs = parseArgs('fit_parameters', fitParametersArgsSchema, args);
+  const model = parseModelOrThrow(parsedArgs.code);
+  const expandedModel = await expandModel(model);
+
+  const paramBounds: ParamBounds[] = Object.entries(parsedArgs.parameters).map(([name, b]) => ({
+    name,
+    min: b.min,
+    max: b.max,
+    initial: b.initial ?? (model.parameters[name] || (b.min + b.max) / 2)
+  }));
+
+  const experimentalData: ExperimentalDataPoint[] = parsedArgs.data.map(d => ({
+    time: d.time,
+    values: d.observables
+  }));
+
+  const simulationOptions = {
+    method: parsedArgs.method as any,
+    t_end: Math.max(...parsedArgs.data.map(d => d.time)),
+    n_steps: Math.max(100, parsedArgs.data.length * 2), // Resolution (min 100 per Claude feedback)
+  };
+
+  await loadEvaluator();
+  
+  const result = await fitParameters({
+    model: expandedModel,
+    paramBounds,
+    experimentalData,
+    simulate: async (overrides, options) => {
+      const runModel = cloneExpandedModel(expandedModel);
+      Object.entries(overrides).forEach(([k, v]) => {
+        runModel.parameters[k] = v;
+      });
+      updateMassActionRates(runModel);
+      return simulate(0, runModel, { ...simulationOptions, ...options }, {
+        checkCancelled: () => {},
+        postMessage: () => {},
+      });
+    },
+    algorithm: parsedArgs.algorithm as any,
+    maxEval: parsedArgs.max_iterations ?? 500,
+    simOptions: simulationOptions as any
+  });
+  
+  return createToolResult(result);
+}
+
+export async function handleDiagnose(args: ToolArgs): Promise<ToolResult<any>> {
+  const parsedArgs = parseArgs('diagnose', diagnoseArgsSchema, args);
+  const model = parseModelOrThrow(parsedArgs.code);
+  
+  // 1. Structural Checks (already in validateModel, but let's summarize)
+  const validation = validateModel(model, false);
+  
+  // 2. Numerical stiffness analysis
+  const ruleRates = (model.reactionRules ?? []).map(r => {
+    if (r.isFunctionalRate) return NaN;
+    const val = model.parameters[r.rate];
+    if (val !== undefined) return val;
+    const num = Number(r.rate);
+    return isFinite(num) ? num : NaN;
+  }).filter(v => !isNaN(v));
+
+  const rateConstants = [
+    ...(model.reactions?.map(r => r.rateConstant) ?? []),
+    ...ruleRates
+  ];
+
+  const stiffness = analyzeModelStiffness(rateConstants, {
+    hasFunctionalRates: model.reactions?.some(r => r.isFunctionalRate) || model.reactionRules?.some(r => r.isFunctionalRate),
+    systemSize: model.species.length
+  });
+  const recommendedConfig = getOptimalCVODEConfig(stiffness);
+
+  // 3. Complexity estimation
+  const totalFactor = (model.reactionRules?.length ?? 0) * model.species.length;
+  const estimation = {
+    seeds: model.species.length,
+    rules: model.reactionRules?.length ?? 0,
+    parameters: Object.keys(model.parameters).length,
+    potentialComplexity: totalFactor > 50000 ? 'very_high' : totalFactor > 5000 ? 'high' : 'normal'
+  };
+
+  return createToolResult({
+    validation: {
+      errors: validation.summary.errors,
+      warnings: validation.summary.warnings
+    },
+    stiffness: {
+      category: stiffness.category,
+      ratio: stiffness.rateRatio,
+      rationale: recommendedConfig.rationale
+    },
+    estimation
+  });
 }
 
 export async function handleGetContactMap(args: ToolArgs): Promise<ToolResult<ContactMap>> {
@@ -999,6 +1174,45 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['code'],
         },
       },
+      {
+        name: 'fit_parameters',
+        description: 'Optimize model parameters to match experimental data',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: { type: 'string', description: 'BNGL code' },
+            parameters: { 
+              type: 'object', 
+              description: 'Map of param name to { min, max, initial? }' 
+            },
+            data: { 
+              type: 'array', 
+              items: { 
+                type: 'object',
+                properties: {
+                  time: { type: 'number' },
+                  observables: { type: 'object' }
+                }
+              },
+              description: 'Experimental data points'
+            },
+            method: { type: 'string', enum: ['ode', 'ssa'], default: 'ode' },
+            algorithm: { type: 'string', enum: ['nelder-mead', 'sbplx'], default: 'nelder-mead' }
+          },
+          required: ['code', 'parameters', 'data'],
+        },
+      },
+      {
+        name: 'diagnose',
+        description: 'Pre-flight check for model complexity, stiffness, and potential simulation issues',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: { type: 'string', description: 'BNGL code to analyze' },
+          },
+          required: ['code'],
+        },
+      },
     ],
   };
 });
@@ -1019,6 +1233,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request: { params: { name
       return handleValidateModel(args);
     case 'get_contact_map':
       return handleGetContactMap(args);
+    case 'fit_parameters':
+      return handleFitParameters(args);
+    case 'diagnose':
+      return handleDiagnose(args);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

@@ -1101,7 +1101,14 @@ interface CVodeModule {
     speciesStoich: number, speciesVolumes: number,
     jacRowPtr: number, jacColIdx: number,
     jacContribOffsets: number, jacContribRxnIdx: number,
-    jacContribCoeffs: number
+    jacContribCoeffs: number,
+    nObservables: number,
+    obsOffsets: number,
+    obsSpeciesIdx: number,
+    obsCoeffs: number,
+    exprBytecodeOffsets: number,
+    exprBytecode: number,
+    exprConstants: number
   ) => number;
   _cvode_load_network?: (
     nReactions: number, nSpecies: number,
@@ -1112,7 +1119,14 @@ interface CVodeModule {
     speciesStoich: number, speciesVolumes: number,
     jacRowPtr: number, jacColIdx: number,
     jacContribOffsets: number, jacContribRxnIdx: number,
-    jacContribCoeffs: number
+    jacContribCoeffs: number,
+    nObservables: number,
+    obsOffsets: number,
+    obsSpeciesIdx: number,
+    obsCoeffs: number,
+    exprBytecodeOffsets: number,
+    exprBytecode: number,
+    exprConstants: number
   ) => number;
   _destroy_network?: (handle: number) => void;
   _update_rate_constants?: (handle: number, rateConstants: number, nReactions: number) => void;
@@ -1380,7 +1394,7 @@ export class CVODESolver {
     new Uint8Array(m.HEAPF64.buffer, exprBytecodePtr, bc.exprBytecode.length).set(bc.exprBytecode);
     m.HEAPF64.set(bc.exprConstants, exprConstantsPtr >> 3);
 
-    const handle = (loadNetwork as any)(
+    const handle = loadNetwork(
       bc.nReactions, bc.nSpecies,
       rateConstPtr, nReactantsPtr, reactantOffsetsPtr, reactantIdxPtr, reactantStoichPtr,
       scalingVolsPtr, speciesOffsetsPtr, speciesRxnIdxPtr, speciesStoichPtr, speciesVolsPtr,
@@ -1461,7 +1475,6 @@ export class CVODESolver {
     let bcLoaded = false;
     const disableBytecode = (this.options as any).disableNativeBytecode === true;
     if (this.networkByteCode && !disableBytecode && (m._cvode_load_network || m._load_network)) {
-      // TODO: Update cwrap signatures to avoid 'any' cast when load_network signature changes
       bcLoaded = this.uploadNetworkByteCode(this.networkByteCode);
     }
 

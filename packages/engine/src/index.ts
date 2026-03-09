@@ -27,7 +27,7 @@ export { ExpressionTranslator } from './services/graph/core/ExpressionTranslator
 export { countEmbeddingDegeneracy } from './services/graph/core/degeneracy';
 
 // High-level graph algorithms
-export { NetworkGenerator } from './services/graph/NetworkGenerator';
+export { NetworkGenerator, NetworkGenerationLimitError } from './services/graph/NetworkGenerator';
 export { NetworkExporter } from './services/graph/NetworkExporter';
 
 // ── Feature Flags ──────────────────────────────────────────────────
@@ -74,6 +74,7 @@ export { analyzeNetwork, checkDeficiencyZeroTheorem } from './services/analysis/
 export type { NetworkAnalysis } from './services/analysis/NetworkAnalysis';
 export { roundForInput, DEFAULT_ZERO_DELTA, formatNumber, computeDefaultBounds, generateRange, validateScanSettings } from './services/analysis/ParameterScan';
 export { fitParameters } from './services/analysis/paramFitter';
+export { MassBalance } from './services/analysis/MassBalance';
 export type { FitAlgorithm, ParamBounds, FitProgress, FitResult, FitConfig, ExperimentalDataPoint } from './services/analysis/paramFitter';
 
 // ── Utils ───────────────────────────────────────────────────────────

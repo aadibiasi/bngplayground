@@ -13,6 +13,19 @@ import type { BNGLEnergyPattern } from '../../types';
 import { Molecule } from './core/Molecule';
 import { BNGLParser } from './core/BNGLParser';
 
+export class NetworkGenerationLimitError extends Error {
+  constructor(
+    message: string,
+    public speciesCount?: number,
+    public reactionCount?: number,
+    public lastRule?: string
+  ) {
+    super(message);
+    this.name = 'NetworkGenerationLimitError';
+  }
+}
+
+
 function factorial(n: number): number {
   if (n <= 1) return 1;
   let result = 1;
@@ -386,6 +399,8 @@ export class NetworkGenerator {
   private aggLimitWarnings = 0;
   private speciesLimitWarnings = 0;
   private currentRuleName: string | null = null;
+  private currentSpeciesList: Species[] = [];
+  private currentReactionsList: Rxn[] = [];
   private energyService?: EnergyService;
 
   constructor(options: Partial<GeneratorOptions> & { seedConcentrationMap?: Map<string, number> } = {}) {
@@ -803,6 +818,8 @@ export class NetworkGenerator {
   const speciesByFingerprint = new Map<string, Species[]>();
     const speciesList: Species[] = [];
     const reactionsList: Rxn[] = [];
+    this.currentSpeciesList = speciesList;
+    this.currentReactionsList = reactionsList;
     const reactionKeys = new Set<string>();  // Fast duplicate detection for reactions
     const reactionIndexByKey = new Map<string, number>();
     const queue: SpeciesGraph[] = [];
@@ -1045,6 +1062,8 @@ export class NetworkGenerator {
 
     progressLog(`[NetworkGenerator] Complete: ${speciesList.length} species, ${reactionsList.length} reactions in ${totalTime}s (${iteration} iterations)`);
 
+    this.currentSpeciesList = [];
+    this.currentReactionsList = [];
     return { species: speciesList, reactions: reactionsList };
   }
 
@@ -5936,10 +5955,13 @@ export class NetworkGenerator {
     return ops.join(';');
   }
 
-  private buildLimitError(message: string): Error {
-    const err = new Error(message);
-    err.name = 'NetworkGenerationLimitError';
-    return err;
+  private buildLimitError(message: string): NetworkGenerationLimitError {
+    return new NetworkGenerationLimitError(
+      message,
+      this.currentSpeciesList.length,
+      this.currentReactionsList.length,
+      this.currentRuleName ?? undefined
+    );
   }
 
 }
