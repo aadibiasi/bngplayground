@@ -322,9 +322,11 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col gap-6 overflow-y-auto">
-        <Card className="p-5 flex flex-col border-l-4 border-l-teal-500 shadow-sm shrink-0">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm uppercase tracking-tight">Experimental Data</h3>
+        <Card className="p-4 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+              Experimental Data Editor
+            </h3>
             <div className="flex gap-2">
                  <Button 
                    variant="subtle" 
@@ -357,6 +359,7 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
                          const rowVals = [row.time.toFixed(4)];
                          for (const name of obsNames) {
                             const exact = row[name] ?? 0;
+                            // +/- 2.5% random noise
                             const noisy = exact * (1 + (Math.random() - 0.5) * 0.05);
                             rowVals.push(noisy.toFixed(4));
                          }
@@ -375,10 +378,15 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
                  <Button variant="subtle" className="h-6 px-2 text-[10px]" onClick={() => setDataInput('')}>Clear</Button>
             </div>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
-            Paste your data points below (CSV format). The first column must be <code className="bg-slate-100 dark:bg-slate-800/50 p-0.5 rounded">time</code>.
-          </p>
-          <div className="flex items-center justify-between text-[10px] mb-2 px-1">
+          <textarea
+            value={dataInput}
+            onChange={e => setDataInput(e.target.value)}
+            className="w-full h-32 p-3 font-mono text-xs bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-md focus:ring-2 focus:ring-teal-500 outline-none resize-none"
+            spellCheck={false}
+            placeholder="# time, Obs1, Obs2..."
+            disabled={isRunning}
+          />
+          <div className="flex items-center justify-between text-[10px]">
             <span className="text-slate-500 dark:text-slate-400">Observables: {observableNames.join(', ')}</span>
             {dataError ? (
               <span className="text-red-500 font-bold">{dataError}</span>
@@ -388,13 +396,6 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
               </span>
             ) : <span className="text-slate-400">No data parsed</span>}
           </div>
-          <textarea
-            value={dataInput}
-            onChange={e => setDataInput(e.target.value)}
-            className="w-full bg-slate-950 text-emerald-400 p-4 font-mono text-[11px] border border-slate-800 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none min-h-[140px] shadow-inner resize-none"
-            spellCheck={false}
-            disabled={isRunning}
-          />
         </Card>
 
         {result ? (

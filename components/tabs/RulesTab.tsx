@@ -157,16 +157,16 @@ export const RulesTab: React.FC<RulesTabProps> = ({ model, results, selectedRule
   );
 
   return (
-    <div className="flex flex-col h-full gap-3">
+    <div className="flex flex-col gap-4">
       {/* Rule Selector - Horizontal Top Bar */}
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex items-center gap-3 shrink-0 bg-slate-50/50 dark:bg-slate-900/30 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
         <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0">
           Rule:
         </label>
         <select
           value={selectedRuleId || ''}
           onChange={(e) => onSelectRule?.(e.target.value)}
-          className="flex-1 max-w-md px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="flex-1 max-w-md px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         >
           <option value="" disabled>Select a rule ({model.reactionRules.length} available)</option>
           {model.reactionRules.map((rule, index) => {
@@ -175,16 +175,15 @@ export const RulesTab: React.FC<RulesTabProps> = ({ model, results, selectedRule
             // Build reaction representation from reactants/products if reactionString not available
             const reactionDisplay = rule.reactionString
               || `${rule.reactants.join(' + ')} → ${rule.products.join(' + ')}`;
-            const truncated = reactionDisplay.length > 60 ? reactionDisplay.substring(0, 57) + '...' : reactionDisplay;
             return (
               <option key={id} value={id}>
-                {label} — {truncated}
+                {label} — {reactionDisplay}
               </option>
             );
           })}
         </select>
         {selectedRuleId && (
-          <span className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-md">
+          <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
             {(() => {
               const rule = model.reactionRules.find((r, i) => getRuleId(r, i) === selectedRuleId);
               if (!rule) return '';
@@ -195,8 +194,8 @@ export const RulesTab: React.FC<RulesTabProps> = ({ model, results, selectedRule
       </div>
 
       {/* Main Content Area - Full Width */}
-      <div className="flex-1 flex flex-col gap-3 min-h-0 overflow-hidden">
-        <section className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 shadow-sm dark:border-slate-700 dark:bg-slate-900 shrink-0 overflow-y-auto max-h-[15%]">
+      <div className="flex flex-col gap-4">
+        <section className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-sm">
           <div className="flex flex-col gap-4">
             <div>
               <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -206,7 +205,7 @@ export const RulesTab: React.FC<RulesTabProps> = ({ model, results, selectedRule
                 Follow how a rule manipulates structural atoms, then inspect their time courses.
               </p>
               {selectedRuleClassification && (
-                <div className="mt-2 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-2 text-xs text-slate-600 dark:text-slate-400 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+                <div className="mt-2 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-2 text-xs text-slate-600 dark:text-slate-300">
                   <RuleChangeBadges summary={selectedRuleClassification} size="xs" />
                   <p className="mt-1 text-[11px] leading-4 text-slate-600 dark:text-slate-300">
                     {renderHumanSummary(selectedRuleClassification)}
@@ -228,7 +227,7 @@ export const RulesTab: React.FC<RulesTabProps> = ({ model, results, selectedRule
           )}
 
           {selectedAtomMeta && (
-            <div className="mt-4 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-3 text-xs dark:border-slate-700 dark:bg-slate-800/70">
+            <div className="mt-4 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/70 p-3 text-xs">
               <div className="flex flex-wrap items-baseline gap-2">
                 <span className="font-semibold text-slate-700 dark:text-slate-200">Focused atom:</span>
                 <span className="rounded bg-sky-100 px-2 py-0.5 font-mono text-[11px] text-sky-700 dark:bg-sky-900/40 dark:text-sky-200">
@@ -261,7 +260,7 @@ export const RulesTab: React.FC<RulesTabProps> = ({ model, results, selectedRule
                           key={ruleId}
                           type="button"
                           onClick={() => onSelectRule?.(ruleId)}
-                          className="ml-1 rounded border border-slate-300 dark:border-slate-600 px-2 py-0.5 font-medium text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:border-slate-600 dark:text-slate-200 dark:hover:border-slate-500"
+                          className="ml-1 rounded border border-slate-300 dark:border-slate-600 px-2 py-0.5 font-medium text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:text-slate-200 dark:hover:border-slate-500"
                         >
                           {insights?.ruleImpacts[ruleId]?.label ?? ruleId}
                         </button>
@@ -273,7 +272,7 @@ export const RulesTab: React.FC<RulesTabProps> = ({ model, results, selectedRule
           )}
         </section>
 
-        <section className="flex-1 overflow-y-auto p-4 pt-4 border-t border-slate-200 dark:border-slate-700 dark:border-slate-700">
+        <section className="p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 h-[600px]">
           {results ? (
             <ResultsChart
               results={results}

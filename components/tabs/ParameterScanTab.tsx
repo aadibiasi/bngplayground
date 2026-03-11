@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea } from 'recharts';
+import { CartesianGrid, ReferenceArea } from 'recharts';
 import { BNGLModel } from '../../types';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
@@ -10,7 +10,7 @@ import { DataTable } from '../ui/DataTable';
 import { bnglService } from '../../services/bnglService';
 import { CHART_COLORS } from '../../constants';
 import HeatmapChart from '../HeatmapChart';
-import { formatTooltipNumber, formatYAxisTick } from '../charts/InteractiveLegend';
+
 
 // reusable helpers for parameter scanning logic and formatting
 import {
@@ -19,6 +19,7 @@ import {
   generateRange,
   formatNumber,
 } from '@bngplayground/engine';
+import { TimeSeriesChart, TimeSeriesSeries } from '../charts/TimeSeriesChart';
 
 interface ParameterScanTabProps {
   model: BNGLModel | null;
@@ -66,10 +67,8 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
   const [error, setError] = useState<string | null>(null);
   const [isLogScale, setIsLogScale] = useState(false);
 
-  // 1D chart interaction (drag to zoom, double-click to reset)
-  const [oneDSelection, setOneDSelection] = useState<{ x1: number; x2: number } | null>(null);
-  const [oneDZoomHistory, setOneDZoomHistory] = useState<Array<{ x1: number | 'dataMin'; x2: number | 'dataMax' }>>([]);
-  const currentOneDDomain = oneDZoomHistory.length > 0 ? oneDZoomHistory[oneDZoomHistory.length - 1] : undefined;
+  // Series visibility for 1D chart
+  const [visibleObservables, setVisibleObservables] = useState<Set<string>>(new Set());
 
   // Neural ODE Surrogate state
   const [useSurrogate, setUseSurrogate] = useState(false);
@@ -491,11 +490,25 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
 
 
   const oneDChartData = useMemo(() => {
-    if (!oneDResult || !selectedObservable) return [];
+    if (!oneDResult) return [];
     return oneDResult.values.map((entry) => ({
-      parameterValue: entry.parameterValue,
-      observableValue: entry.observables[selectedObservable] ?? 0,
+      [oneDResult.parameterName]: entry.parameterValue,
+      ...entry.observables,
     }));
+  }, [oneDResult]);
+
+  const oneDChartSeries = useMemo<TimeSeriesSeries[]>(() => {
+    return observableNames.map((obs, i) => ({
+      name: obs,
+      color: CHART_COLORS[i % CHART_COLORS.length]
+    }));
+  }, [observableNames]);
+
+  // Update visible observables when results arrive
+  useEffect(() => {
+    if (oneDResult && visibleObservables.size === 0) {
+      setVisibleObservables(new Set([selectedObservable]));
+    }
   }, [oneDResult, selectedObservable]);
 
   const heatmapData = useMemo(() => {
@@ -1217,86 +1230,31 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
         <Card className="space-y-6">
           <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">1D Scan Results</h3>
           {selectedObservable && oneDChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={400}>
-              <LineChart
+            <div className="h-[450px]">
+              <TimeSeriesChart
                 data={oneDChartData}
-                margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
-                onMouseDown={(e: any) => {
-                  const x = typeof e?.activeLabel === 'number' ? e.activeLabel : undefined;
-                  if (x === undefined) return;
-                  setOneDSelection({ x1: x, x2: x });
+                series={oneDChartSeries}
+                xAxisKey={oneDResult.parameterName}
+                xAxisLabel={oneDResult.parameterName}
+                yAxisLabel="Observable Value"
+                visibleSeries={visibleObservables}
+                onSeriesToggle={(name) => {
+                  const next = new Set(visibleObservables);
+                  if (next.has(name)) next.delete(name);
+                  else next.add(name);
+                  setVisibleObservables(next);
                 }}
-                onMouseMove={(e: any) => {
-                  if (!oneDSelection) return;
-                  const x = typeof e?.activeLabel === 'number' ? e.activeLabel : undefined;
-                  if (x === undefined) return;
-                  setOneDSelection((prev) => (prev ? { ...prev, x2: x } : prev));
-                }}
-                onMouseUp={() => {
-                  if (!oneDSelection) return;
-                  const { x1, x2 } = oneDSelection;
-                  if (x1 === x2) {
-                    setOneDSelection(null);
-                    return;
+                onSeriesIsolate={(name) => {
+                  if (visibleObservables.size === 1 && visibleObservables.has(name)) {
+                    setVisibleObservables(new Set(observableNames));
+                  } else {
+                    setVisibleObservables(new Set([name]));
                   }
-                  const left = Math.min(x1, x2);
-                  const right = Math.max(x1, x2);
-                  setOneDZoomHistory((prev) => [...prev, { x1: left, x2: right }]);
-                  setOneDSelection(null);
                 }}
-                onDoubleClick={() => {
-                  setOneDZoomHistory([]);
-                  setOneDSelection(null);
-                }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.15} vertical={false} />
-                <XAxis
-                  dataKey="parameterValue"
-                  label={{ value: oneDResult.parameterName, position: 'insideBottom', offset: -5, fontWeight: 'bold', fill: 'currentColor' }}
-                  type="number"
-                  domain={currentOneDDomain ? [currentOneDDomain.x1, currentOneDDomain.x2] : ['dataMin', 'dataMax']}
-                  scale={isLogScale ? 'log' : 'linear'}
-                  tickFormatter={(v) => formatNumber(Number(v))}
-                  tick={{ fontSize: 11, fill: 'currentColor' }}
-                  tickLine={{ stroke: 'currentColor', strokeOpacity: 0.5 }}
-                  axisLine={{ stroke: 'currentColor', strokeOpacity: 0.5 }}
-                />
-                <YAxis
-                  label={{ value: selectedObservable, angle: -90, position: 'insideLeft', fontWeight: 'bold', fill: 'currentColor', offset: 15, style: { textAnchor: 'middle' } }}
-                  domain={['auto', 'auto']}
-                  allowDataOverflow={true}
-                  tickFormatter={formatYAxisTick}
-                  tick={{ fontSize: 11, fill: 'currentColor' }}
-                  tickLine={{ stroke: 'currentColor', strokeOpacity: 0.5 }}
-                  axisLine={{ stroke: 'currentColor', strokeOpacity: 0.5 }}
-                />
-                <Tooltip
-                  formatter={(value: any) => formatTooltipNumber(value, 4)}
-                  labelFormatter={(label) => `${oneDResult.parameterName}: ${typeof label === 'number' ? label.toPrecision(6) : label}`}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="observableValue"
-                  name={selectedObservable}
-                  stroke={CHART_COLORS[0]}
-                  strokeWidth={1.5}
-                  dot={false}
-                  animationDuration={1500}
-                  animationEasing="ease-out"
-                  isAnimationActive={true}
-                />
-
-                {oneDSelection && (
-                  <ReferenceArea
-                    x1={oneDSelection.x1}
-                    x2={oneDSelection.x2}
-                    strokeOpacity={0.3}
-                    fill="#8884d8"
-                    fillOpacity={0.2}
-                  />
-                )}
-              </LineChart>
-            </ResponsiveContainer>
+                allowZoom={true}
+                allowScale={true}
+              />
+            </div>
           ) : (
             <p className="text-sm text-slate-500 dark:text-slate-400">Select an observable to visualize the scan.</p>
           )}
@@ -1318,8 +1276,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
             <Button
               variant="subtle"
               onClick={() => {
-                setOneDZoomHistory([]);
-                setOneDSelection(null);
+                setVisibleObservables(new Set([selectedObservable]));
               }}
             >
               Reset view

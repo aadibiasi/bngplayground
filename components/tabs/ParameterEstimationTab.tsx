@@ -9,6 +9,7 @@ import { DataTable } from '../ui/DataTable';
 import { EmptyState } from '../ui/EmptyState';
 import { StatusMessage } from '../ui/StatusMessage';
 import { CHART_COLORS } from '../../constants';
+import { TimeSeriesChart, TimeSeriesSeries } from '../charts/TimeSeriesChart';
 import { parseExperimentalData, ExperimentalDataPoint } from '../../src/services/data/experimentalData';
 import { fitParameters, FitAlgorithm } from '../../services/optimization/paramFitter';
 import { bnglService } from '../../services/bnglService';
@@ -78,6 +79,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, elbo: 0 });
   const [error, setError] = useState<string | null>(null);
+  const [visibleFitSeries, setVisibleFitSeries] = useState<Set<string>>(new Set());
 
   // Refs
   const isMountedRef = useRef(true);
@@ -255,6 +257,15 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
           priorMeans:        priorMeansSnapshot,
           algorithm:         fitResult.algorithm,
         });
+
+        // Initialize visible series for results
+        const obsNames = Array.from(fitResult.bestPredictions?.keys() || []);
+        const initialVisible = new Set<string>();
+        obsNames.forEach(obs => {
+          initialVisible.add(`${obs} (Exp)`);
+          initialVisible.add(`${obs} (Fit)`);
+        });
+        setVisibleFitSeries(initialVisible);
       }
 
     } catch (err) {
@@ -321,14 +332,37 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
     return parsedData.map((d, i) => {
       const entry: any = { time: d.time };
       for (const [obsName, expVal] of Object.entries(d.values)) {
-        entry[`${obsName}_exp`] = expVal;
+        entry[`${obsName} (Exp)`] = expVal;
       }
       for (const [obsName, predData] of result.bestPredictions!) {
-        entry[`${obsName}_pred`] = predData[i] ?? 0;
+        entry[`${obsName} (Fit)`] = predData[i] ?? 0;
       }
       return entry;
     });
   }, [result, parsedData]);
+
+  const fitComparisonSeries = useMemo<TimeSeriesSeries[]>(() => {
+    if (!result?.bestPredictions) return [];
+    
+    const obsNames = Array.from(result.bestPredictions.keys());
+    return obsNames.flatMap((obs, idx) => {
+      const color = CHART_COLORS[idx % CHART_COLORS.length];
+      return [
+        {
+          name: `${obs} (Exp)`,
+          color,
+          type: 'scatter'
+        },
+        {
+          name: `${obs} (Fit)`,
+          color,
+          type: 'line',
+          strokeWidth: 2,
+          dot: false
+        }
+      ];
+    });
+  }, [result]);
 
   if (!model) {
     return <EmptyState title="No Model Loaded" description="Parse a model to perform parameter estimation." />;
@@ -744,63 +778,32 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
             </Card>
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              {/* Fit Comparison */}
-              <Card className="p-4 space-y-2">
+              <Card className="p-4 space-y-4">
                 <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
                   Time-Course Fit Comparison
                 </h3>
-                <div className="h-[260px] w-full text-slate-700 dark:text-slate-300">
-                  <ResponsiveContainer>
-                    <ComposedChart data={fitComparisonData} margin={{ top: 10, right: 20, left: 65, bottom: 36 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.15} vertical={false} />
-                      <XAxis
-                        dataKey="time"
-                        type="number"
-                        domain={['dataMin', 'dataMax']}
-                        label={{ value: 'Time', position: 'bottom', offset: 12, fill: 'currentColor', fontSize: 13, fontWeight: 'bold' }}
-                        tickCount={6}
-                        tickMargin={6}
-                        tick={{ fontSize: 11, fill: 'currentColor' }}
-                        tickLine={{ stroke: 'currentColor', strokeOpacity: 0.5 }}
-                        axisLine={{ stroke: 'currentColor', strokeOpacity: 0.5 }}
-                        tickFormatter={(v) => formatValue(v)}
-                      />
-                      <YAxis
-                        label={{ value: 'Amount', angle: -90, position: 'insideLeft', fill: 'currentColor', fontSize: 13, fontWeight: 'bold', offset: 20, style: { textAnchor: 'middle' } }}
-                        tickCount={5}
-                        tick={{ fontSize: 11, fill: 'currentColor' }}
-                        tickLine={{ stroke: 'currentColor', strokeOpacity: 0.5 }}
-                        axisLine={{ stroke: 'currentColor', strokeOpacity: 0.5 }}
-                        tickFormatter={(v) => formatValue(v)}
-                      />
-                      <Tooltip
-                        labelFormatter={(label) => `Time: ${formatValue(Number(label))}`}
-                        formatter={(value: any, name: string) => [formatValue(Number(value)), name]}
-                        contentStyle={{ backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '11px' }}
-                      />
-                      {Array.from(result.bestPredictions?.keys() || []).map((obs, idx) => (
-                        <Scatter key={`${obs}_exp`} name={`${obs} (Exp)`} dataKey={`${obs}_exp`} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                      ))}
-                      {Array.from(result.bestPredictions?.keys() || []).map((obs, idx) => (
-                        <Line key={`${obs}_pred`} type="monotone" name={`${obs} (Fit)`} dataKey={`${obs}_pred`} stroke={CHART_COLORS[idx % CHART_COLORS.length]} strokeWidth={1.5} dot={false} animationDuration={1500} animationEasing="ease-out" />
-                      ))}
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-                {/* External legend matching ResultsChart pattern */}
-                <div className="max-h-28 overflow-y-auto border-t border-slate-100 dark:border-slate-800 pt-2">
-                  <div className="flex flex-wrap justify-center items-center gap-x-3 gap-y-1.5 px-2">
-                    {Array.from(result.bestPredictions?.keys() || []).flatMap((obs, idx) => [
-                      <div key={`${obs}_exp_leg`} className="flex items-center gap-1.5">
-                        <div style={{ width: 10, height: 10, backgroundColor: CHART_COLORS[idx % CHART_COLORS.length], borderRadius: '50%' }} />
-                        <span className="text-[10px] text-slate-600 dark:text-slate-400">{obs} (Exp)</span>
-                      </div>,
-                      <div key={`${obs}_fit_leg`} className="flex items-center gap-1.5">
-                        <div style={{ width: 14, height: 2, backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }} />
-                        <span className="text-[10px] text-slate-600 dark:text-slate-400">{obs} (Fit)</span>
-                      </div>
-                    ])}
-                  </div>
+                <div className="h-[350px] w-full">
+                  <TimeSeriesChart
+                    data={fitComparisonData}
+                    series={fitComparisonSeries}
+                    visibleSeries={visibleFitSeries}
+                    onSeriesToggle={(name) => {
+                      const next = new Set(visibleFitSeries);
+                      if (next.has(name)) next.delete(name);
+                      else next.add(name);
+                      setVisibleFitSeries(next);
+                    }}
+                    onSeriesIsolate={(name) => {
+                      if (visibleFitSeries.size === 1 && visibleFitSeries.has(name)) {
+                        const allNames = new Set<string>(fitComparisonSeries.map(s => s.name));
+                        setVisibleFitSeries(allNames);
+                      } else {
+                        setVisibleFitSeries(new Set([name]));
+                      }
+                    }}
+                    yAxisLabel="Amount"
+                    animationDuration={1500}
+                  />
                 </div>
               </Card>
 

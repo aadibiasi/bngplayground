@@ -9,21 +9,8 @@ import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { LoadingSpinner } from './ui/LoadingSpinner';
 import { bnglService } from '../services/bnglService';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
 import { CHART_COLORS } from '../constants';
-import {
-  ExternalLegend,
-  formatTooltipNumber,
-  formatYAxisTick,
-} from './charts/InteractiveLegend';
+import { TimeSeriesChart, TimeSeriesSeries } from './charts/TimeSeriesChart';
 
 interface ComparisonPanelProps {
   model: BNGLModel | null;
@@ -94,49 +81,50 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
     return baseData.map((point, i) => {
       const merged: Record<string, number> = { time: point.time };
 
-      // Add base results with "_base" suffix
+      // Add base results
       Object.keys(point).forEach(key => {
         if (key !== 'time') {
-          merged[`${key}_base`] = point[key];
+          merged[`${key} (base)`] = point[key];
         }
       });
 
-      // Add comparison results with "_comp" suffix
+      // Add comparison results
       if (compData[i]) {
         Object.keys(compData[i]).forEach(key => {
           if (key !== 'time') {
-            merged[`${key}_comp`] = compData[i][key];
+            merged[`${key} (${comparisonFactor}×)`] = compData[i][key];
           }
         });
       }
 
       return merged;
     });
-  }, [baseResults, comparisonResults]);
+  }, [baseResults, comparisonResults, comparisonFactor]);
 
   const observablesToPlot = useMemo(() => {
     if (!mergedData || mergedData.length === 0) return [] as string[];
     const keys = new Set(Object.keys(mergedData[0] ?? {}));
-    return observableNames.filter((name) => keys.has(`${name}_base`) || keys.has(`${name}_comp`));
-  }, [mergedData, observableNames]);
+    return observableNames.filter((name) => keys.has(`${name} (base)`) || keys.has(`${name} (${comparisonFactor}×)`));
+  }, [mergedData, observableNames, comparisonFactor]);
 
-  const observablesToPlotKey = useMemo(() => observablesToPlot.join('|'), [observablesToPlot]);
-
-  useEffect(() => {
-    // Initialize visibility when chart becomes available / model changes
-    if (observablesToPlot.length > 0) {
-      setVisibleObservables(new Set(observablesToPlot));
-    } else {
-      setVisibleObservables(new Set());
-    }
-  }, [observablesToPlotKey]);
-
-  const legendEntries = useMemo(() => {
-    return observablesToPlot.map((name, index) => ({
-      name,
-      color: CHART_COLORS[index % CHART_COLORS.length],
-    }));
-  }, [observablesToPlot]);
+  const chartSeries = useMemo<TimeSeriesSeries[]>(() => {
+    return observablesToPlot.flatMap((name, index) => {
+      const color = CHART_COLORS[index % CHART_COLORS.length];
+      return [
+        {
+          name: `${name} (base)`,
+          color,
+          strokeWidth: 2
+        },
+        {
+          name: `${name} (${comparisonFactor}×)`,
+          color,
+          strokeWidth: 2,
+          strokeDasharray: '5 3'
+        }
+      ];
+    });
+  }, [observablesToPlot, comparisonFactor]);
 
   const handleToggleObservable = (name: string) => {
     setVisibleObservables((prev) => {
@@ -149,11 +137,18 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
 
   const handleIsolateObservable = (name: string) => {
     setVisibleObservables((prev) => {
-      // If already isolated, restore all
-      if (prev.size === 1 && prev.has(name)) return new Set(observablesToPlot);
+      if (prev.size === 1 && prev.has(name)) return new Set(chartSeries.map(s => s.name));
       return new Set([name]);
     });
   };
+
+  useEffect(() => {
+    if (chartSeries.length > 0) {
+      setVisibleObservables(new Set(chartSeries.map(s => s.name)));
+    } else {
+      setVisibleObservables(new Set());
+    }
+  }, [chartSeries]);
 
   if (!model) {
     return (
@@ -237,96 +232,27 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
 
       {mergedData && (
         <div className="mt-4">
-          <div className="flex items-center gap-4 mb-2 text-xs">
-            <span className="flex items-center gap-1">
-              <span className="w-8 h-0.5 bg-blue-500"></span>
-              Base (solid)
+          <div className="flex items-center gap-4 mb-4 text-xs">
+            <span className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700">
+              <span className="w-6 h-0.5 bg-slate-400"></span>
+              <span className="text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">Base Model</span>
             </span>
-            <span className="flex items-center gap-1">
-              <span className="w-8 h-0.5 bg-blue-500 border-dashed" style={{ borderBottom: '2px dashed' }}></span>
-              Modified (dashed)
+            <span className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700">
+              <span className="w-6 h-0.5 bg-slate-400 border-dashed" style={{ borderBottom: '2px dashed' }}></span>
+              <span className="text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">Modified ({comparisonFactor}×)</span>
             </span>
           </div>
 
-          <ResponsiveContainer width="100%" height={400}>
-            <LineChart
+          <div className="h-[450px] w-full">
+            <TimeSeriesChart
               data={mergedData}
-              margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.3)" />
-              <XAxis
-                dataKey="time"
-                label={{ value: 'Time', position: 'insideBottom', offset: -5, fontWeight: 'bold', fill: 'currentColor' }}
-                type="number"
-                domain={['dataMin', 'dataMax']}
-                tick={{ fontSize: 11, fill: 'currentColor' }}
-                tickLine={{ stroke: 'currentColor', strokeOpacity: 0.5 }}
-                axisLine={{ stroke: 'currentColor', strokeOpacity: 0.5 }}
-              />
-              <YAxis
-                label={{ value: 'Concentration', angle: -90, position: 'insideLeft', fontWeight: 'bold', fill: 'currentColor', offset: 15, style: { textAnchor: 'middle' } }}
-                domain={[0, 'dataMax']}
-                allowDataOverflow={true}
-                tickFormatter={formatYAxisTick}
-                tick={{ fontSize: 11, fill: 'currentColor' }}
-                tickLine={{ stroke: 'currentColor', strokeOpacity: 0.5 }}
-                axisLine={{ stroke: 'currentColor', strokeOpacity: 0.5 }}
-              />
-              <Tooltip
-                formatter={(value: any, name: any) => {
-                  const label = String(name)
-                    .replace(/_base$/, ' (base)')
-                    .replace(/_comp$/, ` (${comparisonFactor}×)`);
-                  return [formatTooltipNumber(value, 2), label];
-                }}
-                labelFormatter={(label) => `Time: ${typeof label === 'number' ? label.toFixed(2) : label}`}
-              />
-
-              {observablesToPlot.map((name, i) => (
-                <Line
-                  key={`${name}_base`}
-                  type="monotone"
-                  dataKey={`${name}_base`}
-                  stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                  strokeWidth={1.75}
-                  dot={false}
-                  hide={!visibleObservables.has(name)}
-                  name={`${name}_base`}
-                  animationDuration={1500}
-                  animationEasing="ease-out"
-                  isAnimationActive={true}
-                />
-              ))}
-              {observablesToPlot.map((name, i) => (
-                <Line
-                  key={`${name}_comp`}
-                  type="monotone"
-                  dataKey={`${name}_comp`}
-                  stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                  strokeWidth={1.75}
-                  strokeDasharray="5 3"
-                  dot={false}
-                  hide={!visibleObservables.has(name)}
-                  name={`${name}_comp`}
-                  animationDuration={1500}
-                  animationEasing="ease-out"
-                  isAnimationActive={true}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-
-          {legendEntries.length > 0 && (
-            <ExternalLegend
-              entries={legendEntries}
-              visible={visibleObservables}
-              onToggle={handleToggleObservable}
-              onIsolate={handleIsolateObservable}
+              series={chartSeries}
+              visibleSeries={visibleObservables}
+              onSeriesToggle={handleToggleObservable}
+              onSeriesIsolate={handleIsolateObservable}
+              yAxisLabel="Concentration"
+              animationDuration={1500}
             />
-          )}
-
-          <div className="text-center text-xs text-slate-500 dark:text-slate-400 mt-2">
-            Click legend to toggle series. Double-click legend to isolate/restore.
           </div>
         </div>
       )}

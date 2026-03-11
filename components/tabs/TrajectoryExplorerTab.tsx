@@ -8,18 +8,14 @@ import {
     ZAxis,
     Tooltip,
     ResponsiveContainer,
-    Cell,
-    LineChart,
-    Line,
-    Legend,
     CartesianGrid
 } from 'recharts';
 import { BNGLModel, SimulationResults, SimulationOptions } from '../../types';
 import { bnglWorkerPool } from '../../services/BnglWorkerPool';
 import { CHART_COLORS } from '../../constants';
-import { formatValue } from '../../src/utils/formatValue';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { TimeSeriesChart, TimeSeriesSeries } from '../charts/TimeSeriesChart';
 
 interface TrajectoryExplorerTabProps {
     model: BNGLModel | null;
@@ -132,6 +128,14 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
         return runs[0].results.headers.filter(h => h !== 'time');
     }, [runs]);
 
+    // Metadata for the TimeSeriesChart series
+    const chartSeries = useMemo<TimeSeriesSeries[]>(() => {
+        return observables.map((obs, i) => ({
+            name: obs,
+            color: CHART_COLORS[i % CHART_COLORS.length]
+        }));
+    }, [observables]);
+
     // Update visible observables when first runs arrive
     useEffect(() => {
         if (observables.length > 0 && visibleObservables.size === 0) {
@@ -139,8 +143,7 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
         }
     }, [observables]);
 
-    const toggleObservable = (data: any) => {
-        const name = data.value;
+    const toggleObservable = (name: string) => {
         const next = new Set(visibleObservables);
         if (next.has(name)) {
             next.delete(name);
@@ -150,10 +153,18 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
         setVisibleObservables(next);
     };
 
+    const isolateObservable = (name: string) => {
+        if (visibleObservables.size === 1 && visibleObservables.has(name)) {
+            setVisibleObservables(new Set(observables));
+        } else {
+            setVisibleObservables(new Set([name]));
+        }
+    };
+
     return (
         <div className="h-full flex flex-col space-y-4">
             {/* Control Bar */}
-            <Card className="p-4 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900/50 border-dashed">
+            <Card className="p-4 bg-slate-50 dark:bg-slate-900/50 border-dashed border-slate-200 dark:border-slate-800">
                 <div className="flex flex-wrap items-center gap-6">
                     <div className="flex items-center gap-3">
                         <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Ensemble Size</label>
@@ -215,11 +226,11 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
             </Card>
 
             {!runs.length && !isSimulating && (
-                <div className="flex-1 flex items-center justify-center p-12 text-center bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900/10 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 dark:border-slate-700">
+                <div className="flex-1 flex items-center justify-center p-12 text-center bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900/10 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
                     <div className="max-w-md space-y-4">
                         <div className="text-5xl opacity-40">🌊</div>
                         <h3 className="text-xl font-bold text-slate-700 dark:text-slate-200">Trajectory Landscape</h3>
-                        <p className="text-slate-500 dark:text-slate-400">
+                        <p className="text-slate-500 dark:text-slate-400 text-sm">
                             Generate an ensemble of stochastic simulations to explore how different runs cluster.
                             Identify bi-modality or high-variance behaviors that are hidden in ODE simulations.
                         </p>
@@ -237,20 +248,23 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                         </h4>
                         <div className="flex-1 min-h-0">
                             <ResponsiveContainer width="100%" height="100%">
-                                <ScatterChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
-                                    <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-                                    <XAxis type="number" dataKey="x" hide />
-                                    <YAxis type="number" dataKey="y" hide />
-                                    <ZAxis type="number" range={[100, 500]} />
+                                <ScatterChart 
+                                    margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                                    style={{ pointerEvents: 'auto' }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                                    <XAxis type="number" dataKey="x" hide domain={['auto', 'auto']} />
+                                    <YAxis type="number" dataKey="y" hide domain={['auto', 'auto']} />
                                     <Tooltip
-                                        cursor={{ strokeDasharray: '3 3' }}
+                                        cursor={false}
+                                        wrapperStyle={{ pointerEvents: 'none', zIndex: 1000 }}
                                         content={({ active, payload }) => {
                                             if (active && payload && payload.length) {
                                                 const data = payload[0].payload;
                                                 return (
-                                                    <div className="bg-white dark:bg-slate-900 dark:bg-slate-800 p-2 border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded shadow-lg text-sm">
+                                                    <div className="bg-white dark:bg-slate-900 p-2 border border-slate-200 dark:border-slate-800 rounded shadow-lg text-[10px] pointer-events-none">
                                                         <div className="font-bold text-indigo-500">Run #{data.id}</div>
-                                                        <div className="text-xs text-slate-500 dark:text-slate-400">Click to view trajectory</div>
+                                                        <div className="text-slate-500 dark:text-slate-400">Click to view trajectory</div>
                                                     </div>
                                                 );
                                             }
@@ -258,71 +272,74 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                                         }}
                                     />
                                     <Scatter
-                                        data={runs.map(r => ({ id: r.id, x: r.embedding?.[0] ?? 0, y: r.embedding?.[1] ?? 0 }))}
-                                        onClick={(data) => {
-                                            const idx = runs.findIndex(r => r.id === data.id);
-                                            setSelectedRunIdx(idx);
+                                        data={runs.map((r, i) => ({ id: r.id, x: r.embedding?.[0] ?? 0, y: r.embedding?.[1] ?? 0, index: i }))}
+                                        shape={(props: any) => {
+                                            const { cx, cy, payload } = props;
+                                            const isSelected = selectedRunIdx === payload.index;
+                                            return (
+                                                <g 
+                                                    key={`p-${payload.index}`}
+                                                    style={{ cursor: 'pointer', pointerEvents: 'all' }}
+                                                    onPointerDown={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedRunIdx(payload.index);
+                                                    }}
+                                                >
+                                                    {/* Enhanced hit area */}
+                                                    <circle cx={cx} cy={cy} r={15} fill="transparent" />
+                                                    <circle
+                                                        cx={cx}
+                                                        cy={cy}
+                                                        r={isSelected ? 7 : 5}
+                                                        fill={isSelected ? '#4f46e5' : '#64748b'}
+                                                        fillOpacity={isSelected ? 1 : 0.7}
+                                                        stroke={isSelected ? '#c7d2fe' : 'white'}
+                                                        strokeWidth={isSelected ? 3 : 1}
+                                                        style={{ pointerEvents: 'none' }}
+                                                    />
+                                                </g>
+                                            );
                                         }}
-                                        cursor="pointer"
-                                    >
-                                        {runs.map((r, index) => (
-                                            <Cell
-                                                key={`cell-${index}`}
-                                                fill={selectedRunIdx === index ? '#4f46e5' : '#94a3b8'}
-                                                fillOpacity={selectedRunIdx === index ? 1 : 0.6}
-                                                stroke={selectedRunIdx === index ? '#4f46e5' : 'none'}
-                                                strokeWidth={2}
-                                            />
-                                        ))}
-                                    </Scatter>
+                                        isAnimationActive={false}
+                                    />
                                 </ScatterChart>
                             </ResponsiveContainer>
                         </div>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 italic">
-                            Distance represents similarity in time-series dynamics across all observables.
-                        </p>
+                        <div className="mt-3 px-1">
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">
+                                Distance represents similarity in time-series dynamics across all observables.
+                            </p>
+                        </div>
                     </Card>
 
                     {/* Line Chart */}
                     <Card className="p-6 flex flex-col min-h-[500px]">
-                        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-6 flex items-center gap-2">
-                            📈 {selectedRunIdx !== null ? `Trajectory: Run #${runs[selectedRunIdx].id}` : 'Select a run in the map'}
-                        </h4>
+                        <div className="mb-6 flex items-center justify-between">
+                            <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                                📈 {selectedRunIdx !== null ? `Trajectory Overview: Run #${runs[selectedRunIdx].id}` : 'Select a run in the map'}
+                            </h4>
+                            {selectedRunIdx !== null && (
+                                <button 
+                                    onClick={() => setSelectedRunIdx(null)}
+                                    className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                >
+                                    Clear Selection
+                                </button>
+                            )}
+                        </div>
                         <div className="flex-1 min-h-0">
                             {selectedRunIdx !== null ? (
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 40 }}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
-                                        <XAxis dataKey="time" tickFormatter={(v) => formatValue(v)} label={{ value: 'Time', position: 'bottom', offset: 0 }} />
-                                        <YAxis scale="linear" width={40} tickFormatter={(v) => formatValue(v)} />
-                                        <Tooltip
-                                            contentStyle={{ fontSize: 12, backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff', borderRadius: '8px' }}
-                                            itemStyle={{ padding: '0 4px' }}
-                                            formatter={(v: any) => [formatValue(v), '']}
-                                        />
-                                        <Legend
-                                            onClick={toggleObservable}
-                                            verticalAlign="bottom"
-                                            align="center"
-                                            wrapperStyle={{ cursor: 'pointer', fontSize: '11px', paddingTop: '20px' }}
-                                        />
-                                        {observables.map((obs, i) => (
-                                            <Line
-                                                key={obs}
-                                                type="monotone"
-                                                dataKey={obs}
-                                                stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                                                dot={false}
-                                                strokeWidth={2}
-                                                animationDuration={300}
-                                                hide={!visibleObservables.has(obs)}
-                                            />
-                                        ))}
-                                    </LineChart>
-                                </ResponsiveContainer>
+                                <TimeSeriesChart
+                                    data={chartData}
+                                    series={chartSeries}
+                                    visibleSeries={visibleObservables}
+                                    onSeriesToggle={toggleObservable}
+                                    onSeriesIsolate={isolateObservable}
+                                />
                             ) : (
-                                <div className="h-full flex items-center justify-center opacity-30 text-slate-400 italic text-sm">
-                                    Click a point in the cluster map to see its specific trajectory
+                                <div className="h-full flex flex-col items-center justify-center opacity-30 text-slate-400 italic text-sm text-center">
+                                    <div className="text-4xl mb-4">🖱️</div>
+                                    <p>Click a point in the cluster map to see its specific trajectory</p>
                                 </div>
                             )}
                         </div>

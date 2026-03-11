@@ -56,30 +56,7 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
     }
   }, [model]);
 
-  const generateSyntheticData = async () => {
-    if (!model) return;
-    setIsAnalyzing(true);
-    setError(null);
-    try {
-      const results = await bnglService.simulate(model, {
-        t_end: 50,
-        n_steps: 10,
-        method: 'ode'
-      });
-      
-      // Convert results to CSV format
-      const headers = results.headers.join(', ');
-      const rows = results.data.map(row => 
-        results.headers.map(h => row[h].toFixed(4)).join(', ')
-      ).join('\n');
-      
-      setDataInput(`# Generated synthetic data from current parameters\n# ${headers}\n${rows}`);
-    } catch (err: any) {
-      setError("Failed to generate synthetic data: " + err.message);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
+
 
   const handleRun = async () => {
     if (!model || selectedParams.length === 0) return;
@@ -282,31 +259,96 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
       {/* Main Content */}
       <div className="flex-1 flex flex-col gap-6 overflow-y-auto min-h-0 pb-8 pr-2">
         <div className={`grid grid-cols-1 ${results || isAnalyzing ? '' : 'xl:grid-cols-2'} gap-6 flex-1 min-h-0 max-h-full`}>
-          <Card className={`p-5 flex flex-col border-l-4 border-l-slate-800 dark:border-slate-800 ${results ? 'h-[250px] shrink-0' : 'h-full min-h-[300px]'}`}>
-             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-4">
-                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm uppercase tracking-tight">Data Preview</h3>
+          <Card className="p-4 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+                Experimental Data Editor
+              </h3>
+              <div className="flex gap-2">
                 <Button 
                   variant="subtle" 
-                  className="text-[10px] h-auto py-1.5 px-3 shrink-0 inline-flex flex-row items-center gap-1.5 whitespace-nowrap bg-teal-50 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 hover:bg-teal-100 border border-teal-200 dark:border-teal-800"
-                  onClick={generateSyntheticData}
+                  className="h-6 px-2 text-[10px]" 
+                  onClick={async () => {
+                    if (!model) return;
+                    setIsAnalyzing(true);
+                    setError(null);
+                    try {
+                      // Run a quick deterministic simulation to generate synthetic data
+                      const modelId = await bnglService.prepareModel(model);
+                      const res = await bnglService.simulateCached(modelId, {}, {
+                        method: 'ode',
+                        t_end: model.simulationOptions.t_end || 10,
+                        n_steps: model.simulationOptions.n_steps || 100,
+                      });
+                      
+                      const obsNames = model.observables.map(o => o.name);
+                      let csv = `time, ${obsNames.join(', ')}\n`;
+                      
+                      // We want 10 points
+                      const totalPoints = res.data.length;
+                      const step = Math.max(1, Math.floor((totalPoints - 1) / 9));
+                      
+                      const selectedIndices = [];
+                      for (let i = 0; i < totalPoints; i += step) selectedIndices.push(i);
+                      // Ensure the last point is always included if we didn't perfectly hit it
+                      if (selectedIndices[selectedIndices.length - 1] !== totalPoints - 1) {
+                         if (selectedIndices.length >= 10) selectedIndices[selectedIndices.length - 1] = totalPoints - 1;
+                         else selectedIndices.push(totalPoints - 1);
+                      }
+                      
+                      for (const idx of selectedIndices) {
+                        const row = res.data[idx];
+                        const rowVals = [row.time.toFixed(4)];
+                        for (const name of obsNames) {
+                           const exact = row[name] ?? 0;
+                           // +/- 2.5% random noise
+                           const noisy = exact * (1 + (Math.random() - 0.5) * 0.05);
+                           rowVals.push(noisy.toFixed(4));
+                        }
+                        csv += rowVals.join(', ') + '\n';
+                      }
+                      
+                      setDataInput(csv);
+                    } catch (e: any) {
+                      console.error("Auto-generate failed", e);
+                      setError("Failed to generate synthetic data: " + e.message);
+                    } finally {
+                      setIsAnalyzing(false);
+                    }
+                  }}
                   disabled={isAnalyzing}
                 >
-                  <span>🚀</span>
-                  <span>Synthetic Data</span>
+                  Auto-Generate
                 </Button>
-             </div>
-             
-             <div className="flex-1 flex flex-col gap-3 min-h-0">
-                
-                <textarea
-                  value={dataInput}
-                  onChange={e => setDataInput(e.target.value)}
-                  className="flex-1 w-full bg-slate-950 text-teal-300 p-3 font-mono text-[10px] border border-slate-800 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none shadow-inner min-h-[120px] resize-none"
-                  placeholder="# time, Observable1, Observable2..."
-                  spellCheck={false}
-                  disabled={isAnalyzing}
-                />
-             </div>
+                <Button variant="subtle" className="h-6 px-2 text-[10px]" onClick={() => setDataInput('')}>Clear</Button>
+              </div>
+            </div>
+            <textarea
+              value={dataInput}
+              onChange={e => setDataInput(e.target.value)}
+              className="w-full h-32 p-3 font-mono text-xs bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-md focus:ring-2 focus:ring-teal-500 outline-none resize-none"
+              spellCheck={false}
+              placeholder="# time, Obs1, Obs2..."
+              disabled={isAnalyzing}
+            />
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="text-slate-500 dark:text-slate-400">Observables: {model.observables.map(o => o.name).join(', ')}</span>
+              {(() => {
+                try {
+                  const parsed = parseExperimentalData(dataInput);
+                  if (parsed.length === 0) return <span className="text-slate-400">No data parsed</span>;
+                  const dataObsNames = Object.keys(parsed[0].values);
+                  const sharedObsNames = dataObsNames.filter(n => model.observables.map(o => o.name).includes(n));
+                  return (
+                    <span className={`font-bold ${sharedObsNames.length > 0 ? 'text-emerald-600' : 'text-amber-500'}`}>
+                      {sharedObsNames.length > 0 ? `✓ ${parsed.length} TP | ${sharedObsNames.length} Matching Obs` : `⚠️ No matching observables!`}
+                    </span>
+                  );
+                } catch (err: any) {
+                  return <span className="text-red-500 font-bold">{err.message}</span>;
+                }
+              })()}
+            </div>
           </Card>
 
           {!results && !isAnalyzing && (
