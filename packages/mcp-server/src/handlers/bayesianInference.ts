@@ -1,4 +1,4 @@
-import { abcSMC, simulate, loadEvaluator } from '@bngplayground/engine';
+import { abcSMC, simulate, loadEvaluator, type ABCSMCConfig } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { bayesianInferenceArgsSchema } from '../schemas/index.js';
 import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
@@ -28,7 +28,7 @@ export async function handleBayesianInference(args: ToolArgs): Promise<ToolResul
                 postMessage: () => { },
             });
         },
-        priors: parsedArgs.priors,
+        priors: parsedArgs.priors as ABCSMCConfig['priors'],
         experimentalData,
         observables: parsedArgs.observables,
         distance: parsedArgs.distance ?? 'sse',

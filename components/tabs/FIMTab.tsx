@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 import { FIMHeatmap } from '../../components/FIMHeatmap';
 import { formatValue } from '../../src/utils/formatValue';
-import { CardHeader } from '../ui/Card';
+
 import { EmptyState } from '../ui/EmptyState';
 
 interface FIMTabProps {
