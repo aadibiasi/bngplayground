@@ -13,14 +13,14 @@
 import { describe, it, expect } from 'vitest';
 import {
   WebGPUODESolver,
-  GPUReaction,
   convertToGPUReactions,
   isWebGPUODESolverAvailable
-} from '../packages/engine/src/services/WebGPUODESolver';
+} from '../src/services/WebGPUODESolver';
+import type { GPUReaction } from '../src/services/WebGPUODESolver';
 import {
   isWebGPUSupported,
   isWebGPUReady
-} from '../packages/engine/src/services/WebGPUContext';
+} from '../src/services/WebGPUContext';
 
 describe('WebGPU ODE Solver', () => {
   describe('Availability Detection', () => {

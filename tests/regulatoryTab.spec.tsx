@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import React from 'react';
 import { render } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
@@ -5,9 +6,9 @@ import { describe, it, expect, vi } from 'vitest';
 // we need to spy on the builder used by RegulatoryTab to ensure it passes the
 // correct option.  rather than invoking the real implementation (which is
 // tested separately above) we'll mock the module.
-const mockBuilder = {
+const mockBuilder = vi.hoisted(() => ({
   buildAtomRuleGraph: vi.fn(() => ({ nodes: [], edges: [] })),
-};
+}));
 
 vi.mock('../services/visualization/arGraphBuilder', () => mockBuilder);
 
@@ -15,6 +16,9 @@ import { RegulatoryTab } from '../components/tabs/RegulatoryTab';
 import type { BNGLModel } from '../types';
 
 const dummyModel: BNGLModel = {
+  parameters: {},
+  moleculeTypes: [],
+  species: [],
   reactionRules: [],
   observables: [],
   functions: [],

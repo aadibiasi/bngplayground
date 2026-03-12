@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, extname, resolve } from 'path';
-import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
+import { parseBNGLStrict } from '../packages/engine/src/parser/BNGLParserWrapper';
 import { BNGXMLWriter } from '@bngplayground/engine';
 import { collectBnglFiles, resolveRuleHubRoot } from './helpers/rulehub';
 
@@ -79,7 +79,7 @@ describe('Multi-Compartment Support - Model Repository Validation', () => {
 
                 // Try to parse
                 try {
-                    BNGLParser.parse(content);
+                    parseBNGLStrict(content);
                     parsedCount++;
                 } catch (parseErr: any) {
                     // Some models may have syntax we don't support yet - that's OK
@@ -120,7 +120,7 @@ describe('Multi-Compartment Support - Model Repository Validation', () => {
                 const content = readFileSync(modelPath, 'utf-8');
 
                 try {
-                    const model = BNGLParser.parse(content);
+                    const model = parseBNGLStrict(content);
 
                     // Try to generate XML
                     try {
