@@ -25,6 +25,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Checkout RuleHub
+        uses: actions/checkout@v6
+        with:
+          repository: akutuva21/RuleHub
+          path: RuleHub
       
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -39,6 +45,7 @@ jobs:
         run: npm run test:fast
         env:
           NODE_ENV: test
+          RULEHUB_ROOT: ${{ github.workspace }}/RuleHub
       
       - name: Upload coverage (if generated)
         if: always()
@@ -56,6 +63,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Checkout RuleHub
+        uses: actions/checkout@v6
+        with:
+          repository: akutuva21/RuleHub
+          path: RuleHub
       
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -99,6 +112,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Checkout RuleHub
+        uses: actions/checkout@v6
+        with:
+          repository: akutuva21/RuleHub
+          path: RuleHub
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -132,6 +151,7 @@ jobs:
         run: npx vitest run --config vitest.full.config.ts --shard=${{ matrix.shard }}/3
         env:
           NODE_ENV: test
+          RULEHUB_ROOT: ${{ github.workspace }}/RuleHub
           BNG2_PATH: ${{ env.BNG2_PATH }}
           BNGPATH: ${{ env.BNGPATH }}
           NFSIM_PATH: ${{ env.NFSIM_PATH }}
@@ -168,6 +188,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Checkout RuleHub
+        uses: actions/checkout@v6
+        with:
+          repository: akutuva21/RuleHub
+          path: RuleHub
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -181,6 +207,7 @@ jobs:
         run: npm run test:reference
         env:
           NODE_ENV: test
+          RULEHUB_ROOT: ${{ github.workspace }}/RuleHub
 
       - name: Upload reference test results
         if: always()
@@ -210,6 +237,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Checkout RuleHub
+        uses: actions/checkout@v6
+        with:
+          repository: akutuva21/RuleHub
+          path: RuleHub
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -223,6 +256,7 @@ jobs:
         run: npm run test:deterministic:parity -- --shard ${{ matrix.shard }} --shards 3 --out artifacts/parity_layer_report.deterministic.shard-${{ matrix.shard }}.json --timeoutMs 180000
         env:
           NODE_ENV: test
+          RULEHUB_ROOT: ${{ github.workspace }}/RuleHub
 
       - name: Upload deterministic parity reports
         if: always()

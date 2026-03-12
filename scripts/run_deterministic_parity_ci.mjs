@@ -7,7 +7,13 @@ const webOutputDir = path.join(root, 'web_output');
 
 function resolveRuleHubRoot() {
   const fromEnv = process.env.RULEHUB_ROOT?.trim();
-  if (fromEnv) return path.resolve(fromEnv);
+  if (fromEnv) {
+    const resolved = path.resolve(fromEnv);
+    if (fs.existsSync(resolved)) return resolved;
+  }
+
+  const inRepo = path.resolve(root, 'RuleHub');
+  if (fs.existsSync(inRepo)) return inRepo;
 
   const sibling = path.resolve(root, '..', 'RuleHub');
   if (fs.existsSync(sibling)) return sibling;

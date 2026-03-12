@@ -1,20 +1,26 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
+import {
+  findRuleHubModelPath as findRuleHubModelPathLocal,
+  resolveRuleHubRoot as resolveRuleHubRootLocal,
+} from '../../tools/rulehubLocal';
 
 export function resolveRuleHubRoot(projectRoot: string = process.cwd()): string {
-  const fromEnv = process.env.RULEHUB_ROOT?.trim();
-  if (fromEnv) {
-    const resolved = resolve(fromEnv);
-    if (existsSync(resolved)) return resolved;
-  }
-
-  const candidates = [
-    resolve(projectRoot, '..', 'RuleHub'),
-    resolve(process.cwd(), '..', 'RuleHub'),
+  const rootsToProbe = [
+    projectRoot,
+    resolve(projectRoot, '..'),
+    resolve(projectRoot, '..', '..'),
+    process.cwd(),
+    resolve(process.cwd(), '..'),
   ];
 
-  const existing = candidates.find((candidate) => existsSync(candidate));
-  return existing ?? candidates[0];
+  for (const root of rootsToProbe) {
+    const candidate = resolveRuleHubRootLocal(root);
+    if (candidate && existsSync(candidate)) return candidate;
+  }
+
+  // Last fallback for compatibility with callers that immediately join subpaths.
+  return resolve(projectRoot, '..', 'RuleHub');
 }
 
 export function collectBnglFiles(dir: string, results: string[] = []): string[] {
@@ -41,6 +47,19 @@ function normalizeModelKey(raw: string): string {
 }
 
 export function findRuleHubModelPath(modelName: string, projectRoot: string = process.cwd()): string | null {
+  const rootsToProbe = [
+    projectRoot,
+    resolve(projectRoot, '..'),
+    resolve(projectRoot, '..', '..'),
+    process.cwd(),
+    resolve(process.cwd(), '..'),
+  ];
+
+  for (const root of rootsToProbe) {
+    const manifestAware = findRuleHubModelPathLocal(root, modelName);
+    if (manifestAware && existsSync(manifestAware)) return manifestAware;
+  }
+
   const ruleHubRoot = resolveRuleHubRoot(projectRoot);
   const candidateDirs = [
     join(ruleHubRoot, 'Published'),
