@@ -4,7 +4,7 @@ import { Button } from '../ui/Button';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { InfoIcon } from '../icons/InfoIcon';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { CHART_COLORS } from '../../constants';
+import { CHART_COLORS } from '../../chartColors';
 import { formatTooltipNumber, formatYAxisTick } from '../charts/InteractiveLegend';
 import { formatValue } from '../../src/utils/formatValue';
 import { Card } from '../ui/Card';

@@ -8,6 +8,7 @@
 import { describe, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { findRuleHubModelPath } from './helpers/rulehub';
 
 // Mock browser environment - must be done before dynamic imports
 if (typeof self === 'undefined') {
@@ -22,7 +23,7 @@ const runDerivativeTest = async () => {
     // Dynamic import to ensure mocks are in place
     const { simulate, parseBNGLStrict } = await import('@bngplayground/engine');
 
-    const modelPath = path.join(__dirname, '../public/models/Lang_2024.bngl');
+    const modelPath = findRuleHubModelPath('Lang_2024')!;
     const modelContent = fs.readFileSync(modelPath, 'utf8');
     console.log('Parsing Lang_2024.bngl...');
 

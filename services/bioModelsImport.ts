@@ -1,4 +1,5 @@
 const BIOMODELS_DOWNLOAD_BASE = 'https://www.ebi.ac.uk/biomodels/model/download';
+const BIOMODELS_PROXY_BASE = '/api/biomodels';
 const ZIP_MAGIC_0 = 0x50;
 const ZIP_MAGIC_1 = 0x4b;
 const ZIP_MAGIC_2 = 0x03;
@@ -22,6 +23,36 @@ const HTML_TAG_RE = /<!doctype\s+html|<\s*html(?:\s|>)/i;
 const BINARY_ENTRY_EXT_RE = /\.(mp4|mov|avi|mkv|png|jpe?g|gif|webp|bmp|pdf|zip|gz|tgz|tar|7z|bin|exe|dll|so|dylib|wav|mp3|ogg)$/i;
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+function getEnvString(name: string): string | null {
+  try {
+    const value = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env?.[name];
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function shouldUseBioModelsProxy(): boolean {
+  const explicitBase = getEnvString('VITE_BIOMODELS_API_BASE');
+  if (explicitBase) return explicitBase.startsWith('/');
+
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
+}
+
+export function getBioModelsApiBase(): string {
+  const explicitBase = getEnvString('VITE_BIOMODELS_API_BASE');
+  if (explicitBase) return explicitBase.replace(/\/$/, '');
+  return shouldUseBioModelsProxy() ? BIOMODELS_PROXY_BASE : 'https://www.ebi.ac.uk/biomodels';
+}
+
+function getBioModelsDownloadBase(): string {
+  const apiBase = getBioModelsApiBase();
+  if (/\/model\/download$/i.test(apiBase)) return apiBase;
+  return `${apiBase.replace(/\/$/, '')}/model/download`;
+}
 
 export interface BioModelsSbmlResult {
   normalizedId: string;
@@ -346,9 +377,10 @@ export const fetchBioModelsSbml = async (
 ): Promise<BioModelsSbmlResult> => {
   const normalizedId = normalizeBioModelsId(id);
   const encodedId = encodeURIComponent(normalizedId);
+  const downloadBase = getBioModelsDownloadBase();
   const attempts = [
-    `${BIOMODELS_DOWNLOAD_BASE}/${encodedId}?filename=${encodedId}_url.xml`,
-    `${BIOMODELS_DOWNLOAD_BASE}/${encodedId}`,
+    `${downloadBase}/${encodedId}?filename=${encodedId}_url.xml`,
+    `${downloadBase}/${encodedId}`,
   ];
 
   let lastError: unknown = null;

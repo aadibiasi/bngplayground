@@ -11,11 +11,9 @@ import { exportToNet } from './services/exportNet';
 import { exportToSedML } from './services/exportSedML';
 import { exportToOMEX } from './services/exportOMEX';
 import { BNGLModel, SimulationOptions, SimulationResults, Status, ValidationWarning, EditorMarker } from './types';
-import { EXAMPLES, INITIAL_BNGL_CODE } from './constants';
 import { loadModelCode, setCachedCode, getCachedCode } from './services/modelLoader';
+import { loadModelCatalog, getModelCatalogSync, findCatalogExampleByQuery, type CatalogExample } from './services/modelCatalog';
 
-// Pre-warm cache so AB tutorial is always available synchronously
-setCachedCode('AB', INITIAL_BNGL_CODE);
 import SimulationModal from './components/SimulationModal';
 import { BNGLParser } from '@bngplayground/engine';
 import { validateBNGLModel, validationWarningsToMarkers } from './services/modelValidation';
@@ -26,6 +24,7 @@ import { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from 
 
 const normalizeCode = (value: string) => value.replace(/\r\n/g, '\n').trim();
 const SBML_IMPORT_TIMEOUT_MS = 45_000;
+const INITIAL_BNGL_CODE = '';
 
 const shouldGenerateNetworkForSimulation = (
   model: BNGLModel,
@@ -53,7 +52,7 @@ const mergeExpandedNetworkIntoModel = (model: BNGLModel, expanded: BNGLModel): B
 
 const findExampleById = (id?: string | null) => {
   if (!id) return undefined;
-  return EXAMPLES.find((example) => example.id === id);
+  return getModelCatalogSync()?.examples.find((example) => example.id === id);
 };
 
 function App() {
@@ -88,6 +87,7 @@ function App() {
   const [editorMarkers, setEditorMarkers] = useState<EditorMarker[]>([]);
   const [loadedModelName, setLoadedModelName] = useState<string | null>(null);
   const [loadedModelId, setLoadedModelId] = useState<string | null>(null);
+  const [defaultCatalogModelId, setDefaultCatalogModelId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = bnglService.onProgress((payload) => {
@@ -602,136 +602,95 @@ function App() {
     codeRef.current = code;
   }, [code]);
 
+  const applyCatalogModel = useCallback(async (example: CatalogExample, options?: {
+    statusMessage?: string;
+  }) => {
+    const nextCode = example.code ?? await loadModelCode(example.id);
+    setCachedCode(example.id, nextCode);
+    setCode(nextCode);
+    codeRef.current = nextCode;
+    setLoadedModelId(example.id);
+    setLoadedModelName(example.name);
+    if (options?.statusMessage) {
+      setStatus({ type: 'success', message: options.statusMessage });
+    }
+    return nextCode;
+  }, []);
+
   // Load model from URL hash on startup (for shared links) or from query param (?model=...)
   useEffect(() => {
-    try {
-      const shared = getSharedModelFromUrl();
-      if (shared?.code) {
-        setCode(shared.code);
+    let cancelled = false;
 
-        const example = findExampleById(shared.modelId);
-        // Trust the modelId in the share link for identification; skip code comparison since code may not be embedded
-        if (example) {
-          setLoadedModelId(example.id);
-          setLoadedModelName(shared.name ?? example.name);
-        } else {
-          setLoadedModelId(null);
-          setLoadedModelName(shared.name ?? null);
+    const initializeModel = async () => {
+      try {
+        const catalog = await loadModelCatalog();
+        if (cancelled) return;
+        setDefaultCatalogModelId(catalog.defaultModelId);
+
+        const shared = getSharedModelFromUrl();
+        if (shared?.code) {
+          setCode(shared.code);
+          codeRef.current = shared.code;
+
+          const example = shared.modelId ? await findCatalogExampleByQuery(shared.modelId) : null;
+          if (cancelled) return;
+
+          if (example) {
+            setLoadedModelId(example.id);
+            setLoadedModelName(shared.name ?? example.name);
+          } else {
+            setLoadedModelId(null);
+            setLoadedModelName(shared.name ?? null);
+          }
+
+          clearModelFromUrl();
+          setStatus({ type: 'success', message: 'Model loaded from shared link!' });
+          await handleParse(shared.code);
+          return;
         }
 
-        clearModelFromUrl(); // Clean up URL
-        setStatus({ type: 'success', message: 'Model loaded from shared link!' });
-
-        // parse right away when a shared example appears
-        handleParse(shared.code);
-      } else {
         const params = new URLSearchParams(window.location.search);
         const raw = params.get('model');
         if (raw) {
-          const candidate = raw.toLowerCase();
-          let example = findExampleById(candidate);
-
-          if (!example) {
-            example = EXAMPLES.find(e => (
-              e.id === candidate ||
-              e.id === raw ||
-              (e.name && (e.name === candidate || e.name === raw)) ||
-              // @ts-expect-error: filename is an optional property that might not be on all Example types
-              (e.filename && (e.filename === candidate || e.filename === raw || e.filename === `${candidate}.bngl`))
-            ));
-          }
+          const example = await findCatalogExampleByQuery(raw);
+          if (cancelled) return;
 
           if (example) {
-            console.log('[App] Found model in EXAMPLES:', example.id);
-            // Load code from cache/fetch (may already be embedded in example.code or pre-cached)
-            (async () => {
-              try {
-                const code = example.code ?? await loadModelCode(example.id);
-                setCode(code);
-                setLoadedModelId(example.id);
-                setLoadedModelName(example.name);
-                // Remove the query param so the URL is clean afterwards
-                window.history.replaceState(null, '', window.location.pathname + window.location.hash);
-                setStatus({ type: 'success', message: `Loaded ${example.name} from Model Explorer` });
-
-                // immediately parse the newly-loaded model so UI updates promptly
-                await handleParse(code); // parse the freshly‑set code
-              } catch (e) {
-                console.warn('[App] Failed to load model code for', example.id, e);
-              }
-            })();
+            try {
+              const nextCode = await applyCatalogModel(example, {
+                statusMessage: `Loaded ${example.name} from Model Explorer`
+              });
+              if (cancelled) return;
+              window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+              await handleParse(nextCode);
+            } catch (error) {
+              console.warn('[App] Failed to load RuleHub model for query parameter:', raw, error);
+            }
           } else {
-            console.log('[App] Model not found in EXAMPLES, attempting fetch fallback...');
-            // Attempt to fetch BNGL file from likely locations if it's not embedded in EXAMPLES.
-            (async () => {
-              const tryPaths = (rawVal: string) => {
-                const paths = [] as string[];
-                const clean = rawVal.replace(/^\/+/, '');
-
-                // Determine base path of current app
-                const basePath = window.location.pathname.replace(/\/$/, '');
-
-                const pushBoth = (p: string) => {
-                  paths.push(p);
-                  if (basePath) paths.push(basePath + (p.startsWith('/') ? '' : '/') + p);
-                };
-
-                if (/\.bngl$/i.test(clean)) {
-                  pushBoth('/' + clean);
-                } else {
-                  pushBoth('/' + clean + '.bngl');
-                  const base = clean.split('/').pop();
-                  if (base) {
-                    pushBoth('/models/' + base + '.bngl');
-                    pushBoth('/example-models/' + base + '.bngl');
-                    pushBoth('/published-models/' + base + '.bngl');
-                  }
-                }
-                return paths;
-              };
-
-              const paths = tryPaths(raw);
-              console.debug('[App] Attempting to fetch model from paths:', paths);
-
-              let fetchedCode: string | null = null;
-              let fetchedPath: string | null = null;
-              for (const p of paths) {
-                try {
-                  const attemptUrl = p.startsWith('/') ? p : (window.location.pathname.replace(/\/$/, '') + '/' + p);
-                  console.debug('[App] Fetching', attemptUrl);
-                  const resp = await fetch(attemptUrl);
-                  if (resp.ok) {
-                    fetchedCode = await resp.text();
-                    fetchedPath = attemptUrl;
-                    console.debug('[App] Fetched model from', attemptUrl);
-                    break;
-                  } else {
-                    console.debug('[App] Fetch failed', attemptUrl, resp.status);
-                  }
-                } catch (e) {
-                  console.debug('[App] Fetch error for', p, e);
-                  // ignore and continue
-                }
-              }
-
-              if (fetchedCode) {
-                setCode(fetchedCode);
-                setLoadedModelId(raw);
-                setLoadedModelName((raw.split('/').pop() || raw).replace(/[-_]/g, ' '));
-                window.history.replaceState(null, '', window.location.pathname + window.location.hash);
-                setStatus({ type: 'success', message: 'Model loaded from Model Explorer (fetched)' });
-                // auto-parse the fetched code too
-                await handleParse(fetchedCode);
-              } else {
-                console.warn('[App] Model param not matched to embedded example and fetch failed:', raw, 'tried paths:', paths);
-              }
-            })();
+            console.warn('[App] Query model not found in RuleHub manifest:', raw);
           }
+
+          return;
         }
+
+        const defaultExample = catalog.defaultModelId
+          ? catalog.examples.find((example) => example.id === catalog.defaultModelId)
+          : null;
+
+        if (!defaultExample) {
+          console.warn('[App] No default RuleHub model available for startup.');
+          return;
+        }
+
+        const nextCode = await applyCatalogModel(defaultExample);
+        if (cancelled) return;
+        await handleParse(nextCode);
+      } catch (error) {
+        console.warn('[App] Failed to initialize RuleHub-backed model state:', error);
       }
-    } catch (e) {
-      // Ignore if URL parsing isn't available
-    }
+    };
+
+    void initializeModel();
 
     // Expose batch runner for automation
     import('./src/utils/batchRunner').then(({ runAllModels, runModels }) => {
@@ -739,7 +698,11 @@ function App() {
       (window as any).runModels = runModels;
       console.log('🤖 batch runner loaded. Run `window.runAllModels()` to start.');
     });
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyCatalogModel, handleParse]);
 
   // Whenever a named model is loaded, kick off a parse so the visualization
   // reflects the new code immediately.  we watch loadedModelId rather than
@@ -757,9 +720,17 @@ function App() {
     const urlModel = getSharedModelFromUrl();
     const params = new URLSearchParams(window.location.search);
     const isBatchMode = params.has('batch');
+    const requestedModel = params.get('model');
 
-    // Only auto-run if: first visit, no URL model, code matches default, and NOT in batch mode
-    if (!hasVisited && !urlModel && code === INITIAL_BNGL_CODE && !isBatchMode) {
+    if (
+      !hasVisited &&
+      !urlModel &&
+      !requestedModel &&
+      !isBatchMode &&
+      defaultCatalogModelId &&
+      loadedModelId === defaultCatalogModelId &&
+      code.trim().length > 0
+    ) {
       localStorage.setItem('bng-has-visited', 'true');
 
       // Delay slightly to let UI render first
@@ -802,7 +773,7 @@ function App() {
 
       return () => clearTimeout(timer);
     }
-  }, []); // Empty deps - run once on mount
+  }, [code, defaultCatalogModelId, loadedModelId]);
 
   const handleSimulateWrapper = useCallback(async (options: SimulationOptions, modelOverride?: BNGLModel) => {
     // This wrapper is just to maintain the same interface if needed, or I can just use handleSimulate directly.
@@ -824,8 +795,7 @@ function App() {
 
     if (loadedModelId) {
       const example = findExampleById(loadedModelId);
-      // Compare against cached/embedded code if available; if absent, keep the loaded model ID
-      const knownCode = example?.code ?? getCachedCode(loadedModelId);
+      const knownCode = getCachedCode(loadedModelId);
       if (!example || (knownCode !== undefined && normalizeCode(knownCode) !== normalizeCode(newCode))) {
         setLoadedModelId(null);
       }

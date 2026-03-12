@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import { execSync } from 'child_process';
 import * as path from 'path';
 import { hasNFsim, resolveBNG2Paths } from '../tools/bng2-paths';
+import { findRuleHubModelPath } from './helpers/rulehub';
 
 const paths = resolveBNG2Paths();
 
@@ -21,7 +22,7 @@ describe.skipIf(!hasNFsim())('Polymer Model Parity', () => {
     const testDir = 'temp_parity_polymer';
     const nfsimPath = paths.nfsim!;
     const bng2plPath = paths.bng2pl;
-    const modelPath = 'public/models/polymer.bngl';
+    const modelPath = findRuleHubModelPath('polymer')!;
 
     beforeAll(() => {
         if (!fs.existsSync(testDir)) {

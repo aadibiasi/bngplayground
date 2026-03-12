@@ -5,6 +5,7 @@ import path from 'path';
 import { exec } from 'child_process';
 import util from 'util';
 import { createRequire } from 'module';
+import { findRuleHubModelPath } from './helpers/rulehub';
 const require = createRequire(import.meta.url);
 const createNFsimModule = require('../public/nfsim.js');
 import { hasBNG2, resolveBNG2Paths } from '../tools/bng2-paths';
@@ -14,8 +15,12 @@ const execPromise = util.promisify(exec);
 
 describe.skipIf(!hasBNG2())('Polymer Model Parity (WASM vs BNG2)', () => {
     const modelDir = path.resolve('temp_parity_polymer_wasm');
-    const bnglPath = path.resolve('public/models/polymer.bngl');
+    const bnglPath = findRuleHubModelPath('polymer');
     const bng2Path = paths.bng2pl!;
+
+    if (!bnglPath) {
+        throw new Error('Could not locate polymer model in local RuleHub checkout');
+    }
 
     // Ensure temp dir exists
     if (!fs.existsSync(modelDir)) fs.mkdirSync(modelDir);

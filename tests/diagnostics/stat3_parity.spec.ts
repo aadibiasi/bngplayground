@@ -5,10 +5,11 @@ import { describe, it, expect } from 'vitest';
 import { BNGLParser } from '@bngplayground/engine';
 import { NetworkGenerator } from '@bngplayground/engine';
 import { countPatternMatches } from '@bngplayground/engine';
+import { findRuleHubModelPath } from '../helpers/rulehub';
 
 describe('stat3-mediated-transcription parity diagnostic', () => {
   it('should find embeddings for Active_Dimer and Total_pSTAT3 patterns', async () => {
-    const file = path.resolve(__dirname, '../../example-models/stat3-mediated-transcription.bngl');
+    const file = findRuleHubModelPath('stat3-mediated-transcription')!;
     const code = readFileSync(file, 'utf8');
 
     const model = parseBNGL(code);

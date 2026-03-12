@@ -1,10 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { parseBNGL } from '../services/parseBNGL';
-import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator';
-import { NautyService } from '../packages/engine/src/services/graph/core/NautyService';
-import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
+import { parseBNGL } from '../../services/parseBNGL';
+import { NetworkGenerator } from '../../packages/engine/src/services/graph/NetworkGenerator';
+import { NautyService } from '../../packages/engine/src/services/graph/core/NautyService';
+import { BNGLParser } from '../../packages/engine/src/services/graph/core/BNGLParser';
+import { listAllRuleHubModelFiles } from '../../tools/rulehubLocal';
 
 interface BenchmarkResult {
     model: string;
@@ -40,7 +41,6 @@ async function runBenchmarks() {
     await NautyService.getInstance().init();
     
     const projectRoot = process.cwd();
-    const publishedModelsDir = path.join(projectRoot, 'published-models');
     const tempDir = path.join(projectRoot, 'temp_bench_manual');
     const bng2Path = 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
 
@@ -50,22 +50,14 @@ async function runBenchmarks() {
     const models: { name: string; path: string; category: string }[] = [];
 
     try {
-        if (fs.existsSync(publishedModelsDir)) {
-            categories = fs.readdirSync(publishedModelsDir, { withFileTypes: true })
-                .filter(d => d.isDirectory())
-                .map(d => d.name);
-                
-            for (const cat of categories) {
-                const catDir = path.join(publishedModelsDir, cat);
-                const bnglFiles = fs.readdirSync(catDir).filter(f => f.endsWith('.bngl'));
-                for (const f of bnglFiles) {
-                    models.push({
-                        name: f.replace('.bngl', ''),
-                        path: path.join(catDir, f),
-                        category: cat
-                    });
-                }
-            }
+        const modelFiles = listAllRuleHubModelFiles(projectRoot);
+        categories = [...new Set(modelFiles.map((entry) => entry.source))].sort();
+        for (const entry of modelFiles) {
+            models.push({
+                name: path.basename(entry.filePath, '.bngl'),
+                path: entry.filePath,
+                category: entry.source,
+            });
         }
     } catch (e) {
         console.error("Discovery error:", e);

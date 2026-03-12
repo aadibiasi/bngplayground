@@ -4,13 +4,14 @@ import { describe, expect, it } from 'vitest';
 
 import { generateExpandedNetwork, simulate } from '@bngplayground/engine';
 import { parseBNGL } from '../services/parseBNGL';
+import { findRuleHubModelPath } from './helpers/rulehub';
 
 const hasCvode = existsSync(join(process.cwd(), 'public', 'cvode.wasm'));
 const maybeIt = hasCvode ? it : it.skip;
 
 describe('native CVODE bytecode', () => {
   maybeIt('matches fallback CVODE on the AB tutorial', async () => {
-    const code = readFileSync(join(process.cwd(), 'published-models', 'native-tutorials', 'AB', 'AB.bngl'), 'utf8');
+    const code = readFileSync(findRuleHubModelPath('AB')!, 'utf8');
     const parsed = parseBNGL(code);
     const expanded = await generateExpandedNetwork(parsed as any, () => {}, () => {});
     const model = {

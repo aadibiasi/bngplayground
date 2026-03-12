@@ -4,8 +4,15 @@ import { parseBNGL } from '../services/parseBNGL';
 import * as fs from 'fs';
 import * as path from 'path';
 
+function resolveRuleHubRoot(): string {
+    const fromEnv = process.env.RULEHUB_ROOT?.trim();
+    if (fromEnv) return path.resolve(fromEnv);
+    return path.resolve(process.cwd(), '..', 'RuleHub');
+}
+
 async function run() {
-    const bnglCode = fs.readFileSync('public/models/polymer.bngl', 'utf-8');
+    const bnglPath = path.join(resolveRuleHubRoot(), 'Tutorials', 'General', 'polymer', 'polymer.bngl');
+    const bnglCode = fs.readFileSync(bnglPath, 'utf-8');
     const model = parseBNGL(bnglCode);
     
     console.log('Running web simulation (SSA fallback)...');

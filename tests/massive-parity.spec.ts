@@ -4,10 +4,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parseBNGLWithANTLR, generateExpandedNetwork, jitCompiler } from '../packages/engine/src/index';
 import { BNG2_COMPATIBLE_MODELS, BNG2_EXCLUDED_MODELS, NFSIM_MODELS } from '../constants';
+import { findRuleHubModelPath } from './helpers/rulehub';
 
 const MAX_MODELS = 150;
 const PER_MODEL_TIMEOUT_MS = Math.max(30_000, Number(process.env.MASSIVE_PARITY_TEST_TIMEOUT_MS ?? 120_000));
-const publicModelsDir = path.join(__dirname, '../public/models');
 const MASSIVE_PARITY_KNOWN_HEAVY_MODELS = new Set([
     'Lin_Prion_2019',
 ]);
@@ -57,12 +57,8 @@ function detectSimMethod(text: string): 'ode' | 'ssa' | 'nfsim' | 'unspecified' 
     return 'unspecified';
 }
 
-function findPublicModelPath(modelName: string): string | null {
-    if (!fs.existsSync(publicModelsDir)) return null;
-    const key = normalizeKey(modelName);
-    const files = fs.readdirSync(publicModelsDir).filter((f) => f.toLowerCase().endsWith('.bngl'));
-    const match = files.find((f) => normalizeKey(f) === key);
-    return match ? path.join(publicModelsDir, match) : null;
+function findModelPath(modelName: string): string | null {
+    return findRuleHubModelPath(modelName, path.join(__dirname, '..'));
 }
 
 describe('Massive JIT/Bytecode Parity Test', () => {
@@ -83,9 +79,9 @@ describe('Massive JIT/Bytecode Parity Test', () => {
                 skipped.push({ model: modelName, reason: 'nfsim_model' });
                 return false;
             }
-            const filePath = findPublicModelPath(modelName);
+            const filePath = findModelPath(modelName);
             if (!filePath) {
-                skipped.push({ model: modelName, reason: 'missing_in_public_models' });
+                skipped.push({ model: modelName, reason: 'missing_in_rulehub' });
                 return false;
             }
             const content = fs.readFileSync(filePath, 'utf8');
@@ -114,7 +110,7 @@ describe('Massive JIT/Bytecode Parity Test', () => {
 
     selectedModels.forEach(modelName => {
         it(`should handle ${modelName} parity`, async () => {
-            const filePath = findPublicModelPath(modelName);
+            const filePath = findModelPath(modelName);
             if (!filePath || !fs.existsSync(filePath)) {
                 return;
             }

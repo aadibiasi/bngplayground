@@ -2,10 +2,11 @@
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import { resolveBNG2Paths } from '../../tools/bng2-paths';
+import { findRuleHubModelPath } from '../../tools/rulehubLocal';
 
-const BNG2_PATH = 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
+const BNG2_PATH = process.env.BNG2_PATH || resolveBNG2Paths().bng2pl;
 const MODELS_LIST = 'published_models_list.txt';
-const MODELS_DIR = 'public/models';
 const OUTPUT_DIR = 'bng_test_output';
 
 if (!fs.existsSync(OUTPUT_DIR)) {
@@ -19,8 +20,8 @@ let successCount = 0;
 let failCount = 0;
 
 for (const model of models) {
-    const bnglPath = path.join(MODELS_DIR, `${model}.bngl`);
-    if (!fs.existsSync(bnglPath)) {
+    const bnglPath = findRuleHubModelPath(process.cwd(), model);
+    if (!bnglPath || !fs.existsSync(bnglPath)) {
         console.warn(`[WARN] Model file not found: ${bnglPath}`);
         continue;
     }

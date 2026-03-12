@@ -14,8 +14,23 @@ const __dirname = path.dirname(__filename);
 const execAsync = promisify(exec);
 
 const BNG2_PATH = resolveBNG2Paths().bng2pl;
-const EXAMPLES_DIR = path.resolve(__dirname, '../example-models');
+const RULEHUB_ROOT = process.env.RULEHUB_ROOT
+  ? path.resolve(process.env.RULEHUB_ROOT)
+  : path.resolve(__dirname, '../../../RuleHub');
+const RULEHUB_EXAMPLES_DIR = path.join(RULEHUB_ROOT, 'Contributed', 'BNGPlayground_Examples');
 const TEMP_DIR = path.resolve(__dirname, '../temp_bng_output');
+
+function collectBnglFiles(dir: string, results: string[] = []) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collectBnglFiles(fullPath, results);
+    } else if (entry.isFile() && entry.name.endsWith('.bngl')) {
+      results.push(fullPath);
+    }
+  }
+  return results;
+}
 
 if (!BNG2_PATH) {
   console.error('BNG2.pl not found. Install bionetgen or set BNG2_PATH.');
@@ -123,14 +138,17 @@ export function parseGraphML(content: string) {
 }
 
 async function runTest() {
-  const files = fs.readdirSync(EXAMPLES_DIR).filter(f => f.endsWith('.bngl'));
+  if (!fs.existsSync(RULEHUB_EXAMPLES_DIR)) {
+    throw new Error('RuleHub example directory not found. Set RULEHUB_ROOT before running this script.');
+  }
+  const files = collectBnglFiles(RULEHUB_EXAMPLES_DIR);
   console.log(`Found ${files.length} models.`);
 
   const results: any[] = [];
 
-  for (const file of files) {
-    const filePath = path.join(EXAMPLES_DIR, file);
-    const modelName = path.basename(file, '.bngl');
+  for (const filePath of files) {
+    const modelName = path.basename(filePath, '.bngl');
+    const file = path.basename(filePath);
 
     try {
       // 1. Run BNG2.pl

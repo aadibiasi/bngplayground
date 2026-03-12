@@ -4,6 +4,7 @@ import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { VALIDATION_MODEL_NAMES } from '../validation_models';
 import { resolveBNG2Paths } from '../bng2-paths';
+import { findRuleHubModelPath, resolveRuleHubRoot } from '../rulehubLocal';
 
 const DEFAULT_BNG2_PATH = resolveBNG2Paths().bng2pl ?? '';
 const DEFAULT_PERL_CMD = process.env.PERL_CMD ?? 'perl';
@@ -16,7 +17,6 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const BNG2_PATH = process.env.BNG2_PATH ?? DEFAULT_BNG2_PATH;
 const PERL_CMD = process.env.PERL_CMD ?? DEFAULT_PERL_CMD;
 const OUTPUT_DIR = path.join(PROJECT_ROOT, 'bng_test_output');
-const MODELS_DIR = path.join(PROJECT_ROOT, 'public/models');
 
 // Skip list (same as tests)
 const SKIP_MODELS = ['blbr', 'cBNGL_simple'];
@@ -38,11 +38,11 @@ function shouldSkip(modelName: string): boolean {
 }
 
 function runBNG2(modelName: string, outputDir: string) {
-    const modelPath = path.join(MODELS_DIR, `${modelName}.bngl`);
+    const modelPath = findRuleHubModelPath(PROJECT_ROOT, modelName);
     console.log(`[BNG2] Processing ${modelName}...`);
 
-    if (!fs.existsSync(modelPath)) {
-        console.error(`[BNG2] Model file not found: ${modelPath}`);
+    if (!modelPath || !fs.existsSync(modelPath)) {
+        console.error(`[BNG2] Model file not found in local RuleHub checkout for: ${modelName}`);
         return false;
     }
 
@@ -99,6 +99,11 @@ function runBNG2(modelName: string, outputDir: string) {
 function main() {
     if (!fs.existsSync(BNG2_PATH)) {
         console.error(`BNG2.pl not found at ${BNG2_PATH}`);
+        process.exit(1);
+    }
+
+    if (!resolveRuleHubRoot(PROJECT_ROOT)) {
+        console.error('RuleHub checkout not found. Set RULEHUB_ROOT before running this script.');
         process.exit(1);
     }
 

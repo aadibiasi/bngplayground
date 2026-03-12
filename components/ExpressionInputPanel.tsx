@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
-import { CHART_COLORS } from '../constants';
+import { CHART_COLORS } from '../chartColors';
 import { validateObservablePattern } from '@bngplayground/engine';
 import { BNGLParser } from '@bngplayground/engine';
 

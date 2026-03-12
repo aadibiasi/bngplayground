@@ -1,8 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { Atomizer } from '../src/lib/atomizer/index.ts';
+import { Atomizer } from '../../src/lib/atomizer/index.ts';
 import { resolveBNG2Paths } from '../../tools/bng2-paths';
+import { listRuleHubExampleModelFiles } from '../../tools/rulehubLocal';
 
 // libsbmljs uses 'self', which is not defined in Node.js
 if (typeof self === 'undefined') {
@@ -230,14 +231,13 @@ async function verifyModel(modelPath: string) {
 
 async function main() {
     ensureDirs();
-    const tutorialsDir = path.resolve('example-models');
-    const allFiles = fs.readdirSync(tutorialsDir).filter(f => f.endsWith('.bngl'));
+    const allFiles = listRuleHubExampleModelFiles(process.cwd());
     const modelsToRun = process.env.MODELS ? process.env.MODELS.split(',') : null;
     const files = modelsToRun ? allFiles.filter(f => modelsToRun.some(m => f.includes(m))) : allFiles;
 
     console.log(`Verifying ${files.length} models...`);
     for (const file of files) {
-        await verifyModel(path.join(tutorialsDir, file));
+        await verifyModel(file);
     }
 
     fs.writeFileSync('validation_report.json', JSON.stringify(allResults, null, 2));

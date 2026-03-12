@@ -5,12 +5,13 @@ import { parseBNGLStrict } from '../packages/engine/src/parser/BNGLParserWrapper
 import * as fs from 'fs';
 import { execSync } from 'child_process';
 import { hasNFsim, resolveBNG2Paths } from '../tools/bng2-paths';
+import { findRuleHubModelPath } from './helpers/rulehub';
 
 const paths = resolveBNG2Paths();
 
 describe.skipIf(!hasNFsim())('Model_ZAP Parity', () => {
     it('should simulate Model_ZAP successfully with NFsim', () => {
-        const bnglPath = 'public/models/Model_ZAP.bngl';
+        const bnglPath = findRuleHubModelPath('Model_ZAP')!;
         const bnglCode = fs.readFileSync(bnglPath, 'utf-8');
         
         console.log('Parsing BNGL...');

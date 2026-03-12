@@ -2,10 +2,19 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseBNGLWithANTLR } from '@bngplayground/engine';
+import { findRuleHubModelPath } from '../tests/helpers/rulehub';
+
+function requireRuleHubModel(modelName: string): string {
+  const modelPath = findRuleHubModelPath(modelName, process.cwd());
+  if (!modelPath) {
+    throw new Error(`Could not locate ${modelName} in local RuleHub checkout`);
+  }
+  return modelPath;
+}
 
 describe('BNGL parser regressions', () => {
   it('parses Jaruszewicz-Blonska_2023 (handles UTF-8 BOM)', () => {
-    const bnglContent = readFileSync('public/models/Jaruszewicz-Blonska_2023.bngl', 'utf8');
+    const bnglContent = readFileSync(requireRuleHubModel('Jaruszewicz-Blonska_2023'), 'utf8');
     const result = parseBNGLWithANTLR(bnglContent);
     expect(result.success).toBe(true);
     expect(result.errors).toHaveLength(0);
@@ -21,7 +30,7 @@ describe('BNGL parser regressions', () => {
 
   it('parses organelle_transport_struct (CBNGL per-molecule compartments)', () => {
     const bnglContent = readFileSync(
-      'published-models/native-tutorials/CBNGL/organelle_transport_struct.bngl',
+      requireRuleHubModel('organelle_transport_struct'),
       'utf8'
     );
     const result = parseBNGLWithANTLR(bnglContent);
@@ -31,7 +40,7 @@ describe('BNGL parser regressions', () => {
   });
 
   it('parses scientific notation in simulate() args (Lang_2024: 1e3 steps)', () => {
-    const bnglContent = readFileSync('public/models/Lang_2024.bngl', 'utf8');
+    const bnglContent = readFileSync(requireRuleHubModel('Lang_2024'), 'utf8');
     const result = parseBNGLWithANTLR(bnglContent);
     expect(result.success).toBe(true);
     expect(result.errors).toHaveLength(0);

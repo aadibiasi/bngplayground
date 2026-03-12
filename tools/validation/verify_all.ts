@@ -5,12 +5,12 @@ import { fileURLToPath } from 'url';
 import { NetworkGenerator } from '@bngplayground/engine';
 import { BNGLParser } from '@bngplayground/engine';
 import { parseBNGL } from '../../services/parseBNGL.ts';
+import { listRuleHubExampleModelFiles, listRuleHubPublishedModelFiles, resolveRuleHubRoot } from '../rulehubLocal.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PUBLISHED_MODELS_DIR = path.resolve(__dirname, '../../published-models');
-const EXAMPLE_MODELS_DIR = path.resolve(__dirname, '../../example-models');
+const PROJECT_ROOT = path.resolve(__dirname, '../..');
 
 interface VerificationResult {
   model: string;
@@ -106,6 +106,11 @@ async function verifyModel(filePath: string): Promise<VerificationResult | null>
 }
 
 async function run() {
+  const ruleHubRoot = resolveRuleHubRoot(PROJECT_ROOT);
+  if (!ruleHubRoot) {
+    throw new Error('RuleHub checkout not found. Set RULEHUB_ROOT before running this script.');
+  }
+
   const results: VerificationResult[] = [];
 
   function getBnglFiles(dir: string): string[] {
@@ -123,10 +128,10 @@ async function run() {
   }
 
   const files = [
-    ...getBnglFiles(PUBLISHED_MODELS_DIR),
-    ...getBnglFiles(EXAMPLE_MODELS_DIR)
+    ...listRuleHubPublishedModelFiles(PROJECT_ROOT),
+    ...listRuleHubExampleModelFiles(PROJECT_ROOT)
   ];
-  console.log(`Found ${files.length} models to verify.`);
+  console.log(`Found ${files.length} RuleHub models to verify.`);
 
   for (const file of files) {
     const result = await verifyModel(file);

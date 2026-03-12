@@ -15,6 +15,7 @@ import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkG
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
 import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical';
 import { resolveBNG2Paths, hasBNG2 } from '../tools/bng2-paths';
+import { findRuleHubModelPath } from './helpers/rulehub';
 import type { BNGLModel } from '../types';
 
 const thisDir = dirname(fileURLToPath(import.meta.url));
@@ -23,7 +24,7 @@ const projectRoot = resolve(thisDir, '..');
 const formatSpeciesList = (list: string[]) => (list.length > 0 ? list.join(' + ') : '0');
 
 describe('cBNGL_simple Volume Scaling', () => {
-  const modelPath = resolve(projectRoot, 'published-models', 'native-tutorials', 'CBNGL', 'cBNGL_simple.bngl');
+  const modelPath = findRuleHubModelPath('cBNGL_simple', projectRoot)!;
   
   // Use temporary directory for output to avoid hardcoded relative paths
   const tempDir = mkdtempSync(join(tmpdir(), 'bng-test-'));

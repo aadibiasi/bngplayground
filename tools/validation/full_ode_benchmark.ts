@@ -19,6 +19,7 @@ import { NautyService } from '@bngplayground/engine';
 import { createSolver } from '@bngplayground/engine';
 import { execSync } from 'child_process';
 import { resolveBNG2Paths } from '../bng2-paths';
+import { findRuleHubModelPath, resolveRuleHubRoot } from '../rulehubLocal';
 
 const paths = resolveBNG2Paths();
 
@@ -1080,11 +1081,21 @@ async function runBenchmark() {
       foundPath = path.resolve(target);
     }
 
-    const roots = [
-      path.join(__dirname, '../public/models'),
-      path.join(__dirname, '../example-models'),
-      path.join(__dirname, '../published-models')
-    ];
+    const ruleHubRoot = resolveRuleHubRoot(ROOT_DIR);
+    const roots = ruleHubRoot
+      ? [
+          path.join(ruleHubRoot, 'Published'),
+          path.join(ruleHubRoot, 'Tutorials'),
+          path.join(ruleHubRoot, 'PyBioNetGen'),
+          path.join(ruleHubRoot, 'Contributed', 'BNGPlayground_Examples'),
+          path.join(ruleHubRoot, 'Contributed', 'BNGPlayground_Validation'),
+          path.join(ruleHubRoot, 'Contributed', 'BNGPlayground_PublicRuntime')
+        ]
+      : [];
+
+    if (!foundPath) {
+      foundPath = findRuleHubModelPath(ROOT_DIR, target);
+    }
 
     if (!foundPath) {
       for (const root of roots) {
@@ -1100,7 +1111,7 @@ async function runBenchmark() {
       console.log(`Found model at: ${foundPath}`);
       allModels = [{ model: target, path: foundPath, hasGdat: false, gdatRows: 0 }];
     } else {
-      console.error(`Model ${target} not found in public/models, example-models, or published-models`);
+      console.error(`Model ${target} not found in a local RuleHub checkout. Set RULEHUB_ROOT or pass an explicit .bngl path.`);
       process.exit(1);
     }
   } else {
@@ -1120,7 +1131,7 @@ async function runBenchmark() {
   // Debug: verify models loaded
   console.log(`[Debug] allModels length: ${allModels.length}`);
 
-  console.log(`Found ${allModels.length} models in published-models and example-models\n`);
+  console.log(`Found ${allModels.length} models for benchmarking\n`);
 
   // Create temp directory
   const tempDir = path.join(ROOT_DIR, 'temp_benchmark');

@@ -1,8 +1,26 @@
 const fs = require('fs');
 const path = require('path');
 
-const PROJECT_ROOT = path.resolve(__dirname, '..');
-const MODELS_DIR = path.join(PROJECT_ROOT, 'public', 'models');
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+
+function resolveRuleHubRoot(projectRoot) {
+  const fromEnv = process.env.RULEHUB_ROOT && process.env.RULEHUB_ROOT.trim();
+  if (fromEnv) {
+    const resolved = path.resolve(fromEnv);
+    if (fs.existsSync(resolved)) return resolved;
+  }
+
+  const sibling = path.resolve(projectRoot, '..', 'RuleHub');
+  return fs.existsSync(sibling) ? sibling : null;
+}
+
+const RULEHUB_ROOT = resolveRuleHubRoot(PROJECT_ROOT);
+if (!RULEHUB_ROOT) {
+  console.error('RuleHub checkout not found. Set RULEHUB_ROOT or place RuleHub beside this repo.');
+  process.exit(2);
+}
+
+const MODELS_DIR = path.join(RULEHUB_ROOT, 'Published');
 
 function stripBnglCommentLines(code) {
   return code.replace(/^\s*#.*$/gm, '');
@@ -62,7 +80,7 @@ function main() {
 
   rows.sort((a, b) => b.totalCount - a.totalCount || a.id.localeCompare(b.id));
 
-  console.log('public/models BNGLs with >1 simulate/simulate_ode anywhere:', rows.length);
+  console.log('RuleHub Published BNGLs with >1 simulate/simulate_ode anywhere:', rows.length);
   console.log('total\tactions\thasActions\tid');
   for (const r of rows) {
     console.log(`${r.totalCount}\t${r.actionsCount}\t${r.hasActions ? 'y' : 'n'}\t${r.id}`);

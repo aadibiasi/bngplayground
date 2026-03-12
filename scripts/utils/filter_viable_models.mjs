@@ -3,8 +3,39 @@ import fs from 'fs';
 import path from 'path';
 
 const MODELS_LIST = 'published_models_list.txt';
-const MODELS_DIR = 'public/models';
 const VIABLE_OUTPUT = 'viable_published_models.txt';
+
+function resolveRuleHubRoot(projectRoot) {
+    const fromEnv = process.env.RULEHUB_ROOT?.trim();
+    if (fromEnv) {
+        const resolved = path.resolve(fromEnv);
+        if (fs.existsSync(resolved)) return resolved;
+    }
+
+    const sibling = path.resolve(projectRoot, '..', 'RuleHub');
+    return fs.existsSync(sibling) ? sibling : null;
+}
+
+function collectBnglFilesRecursive(rootDir, results = []) {
+    if (!fs.existsSync(rootDir)) return results;
+
+    for (const entry of fs.readdirSync(rootDir, { withFileTypes: true })) {
+        const fullPath = path.join(rootDir, entry.name);
+        if (entry.isDirectory()) collectBnglFilesRecursive(fullPath, results);
+        else if (entry.isFile() && entry.name.endsWith('.bngl')) results.push(fullPath);
+    }
+
+    return results;
+}
+
+const PROJECT_ROOT = process.cwd();
+const RULEHUB_ROOT = resolveRuleHubRoot(PROJECT_ROOT);
+if (!RULEHUB_ROOT) {
+    throw new Error('RuleHub checkout not found. Set RULEHUB_ROOT or place RuleHub beside this repo.');
+}
+
+const publishedFiles = collectBnglFilesRecursive(path.join(RULEHUB_ROOT, 'Published'));
+const publishedByName = new Map(publishedFiles.map((filePath) => [path.basename(filePath, '.bngl'), filePath]));
 
 const EXCLUDED_IN_CONSTANTS = [
   'Erdem_2021', 'Faeder_2003', 'fceri_2003', 'fceri_fyn_lig', 
@@ -18,8 +49,8 @@ const viableModels = [];
 for (const model of models) {
     if (EXCLUDED_IN_CONSTANTS.includes(model)) continue;
 
-    const bnglPath = path.join(MODELS_DIR, `${model}.bngl`);
-    if (!fs.existsSync(bnglPath)) continue;
+    const bnglPath = publishedByName.get(model);
+    if (!bnglPath || !fs.existsSync(bnglPath)) continue;
 
     const content = fs.readFileSync(bnglPath, 'utf-8');
     const lines = content.split('\n');

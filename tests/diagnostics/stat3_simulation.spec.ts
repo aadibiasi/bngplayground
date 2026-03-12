@@ -4,10 +4,11 @@ import { parseBNGL } from '../../services/parseBNGL';
 import { simulate } from '@bngplayground/engine';
 import { SimulationOptions } from '../../types';
 import { describe, it, expect } from 'vitest';
+import { findRuleHubModelPath } from '../helpers/rulehub';
 
 describe('stat3-mediated-transcription simulation parity', () => {
   it('should produce non-zero Total_pSTAT3 at early timepoints', async () => {
-    const file = path.resolve(__dirname, '../../example-models/stat3-mediated-transcription.bngl');
+    const file = findRuleHubModelPath('stat3-mediated-transcription')!;
     const code = readFileSync(file, 'utf8');
     const model = parseBNGL(code);
 

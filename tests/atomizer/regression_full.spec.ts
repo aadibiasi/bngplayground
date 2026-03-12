@@ -13,9 +13,11 @@ import { simulate } from '@bngplayground/engine';
 import { convertBNGXmlToBNGL } from '../../src/lib/atomizer/parser/bngXmlParser';
 import { BNG2_EXCLUDED_MODELS, NFSIM_MODELS } from '../../constants';
 import { generateExpandedNetwork } from '@bngplayground/engine';
+import { resolveRuleHubRoot } from '../helpers/rulehub';
 
 console.error(`[DEBUG-ENTRY] CWD: ${process.cwd()}`);
-console.error(`[DEBUG-ENTRY] example-models exists: ${fs.existsSync('example-models')}`);
+const RULEHUB_EXAMPLES_DIR = join(resolveRuleHubRoot(process.cwd()), 'Contributed', 'BNGPlayground_Examples');
+console.error(`[DEBUG-ENTRY] RuleHub examples exists: ${fs.existsSync(RULEHUB_EXAMPLES_DIR)}`);
 
 const VALIDATE_DIR = resolveBNGValidateDir();
 const BNG_OUTPUT_DIR = 'bng_test_output';
@@ -313,9 +315,9 @@ interface RunSummary {
 }
 const masterReport: Record<string, { history: RunSummary[]; latest?: RunSummary }> = {};
 
-describe('Atomizer+Simulation parity (numeric comparison) — example-models', () => {
-  // Discover all .bngl files under example-models (recursive)
-    const allModels = getBnglFiles('example-models');
+describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples', () => {
+  // Discover all migrated example model files (recursive)
+    const allModels = getBnglFiles(RULEHUB_EXAMPLES_DIR);
     console.error(`[DEBUG] Discovered ${allModels.length} models: ${JSON.stringify(allModels.map(m => basename(m)))}`);
     it('should have discovered models', () => {
       expect(allModels.length).toBeGreaterThan(0);

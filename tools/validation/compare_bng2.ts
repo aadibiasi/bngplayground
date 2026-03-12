@@ -9,6 +9,7 @@ import { NetworkGenerator } from '@bngplayground/engine';
 import { BNGLParser } from '@bngplayground/engine';
 import { GraphCanonicalizer } from '@bngplayground/engine';
 import { parseBNGL } from '../../services/parseBNGL.ts';
+import { findRuleHubModelPath, getRuleHubManifestBnglPaths } from '../rulehubLocal';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -317,9 +318,8 @@ function findBnglModel(netFile: string): string | null {
     baseName.replace(/^temp_/, ''),
   ];
 
-  const publishedModelsDir = path.join(ROOT_DIR, 'published-models');
   const bngTestOutputDir = path.join(ROOT_DIR, 'bng_test_output');
-  const publicModelsDir = path.join(ROOT_DIR, 'public', 'models');
+  const ruleHubBnglPaths = getRuleHubManifestBnglPaths(ROOT_DIR);
 
   function searchDir(dir: string, targetName: string): string | null {
     const items = fs.readdirSync(dir, { withFileTypes: true });
@@ -335,23 +335,24 @@ function findBnglModel(netFile: string): string | null {
     return null;
   }
 
-  // 1) Fast paths (non-recursive) for this repo's common model locations.
   for (const pattern of patterns) {
     const directCandidates = [
       path.join(bngTestOutputDir, `${pattern}.bngl`),
-      path.join(publicModelsDir, `${pattern}.bngl`),
     ];
     for (const candidate of directCandidates) {
       if (fs.existsSync(candidate)) return candidate;
     }
   }
 
-  // 2) Back-compat recursive search for older layouts.
-  if (fs.existsSync(publishedModelsDir)) {
-    for (const pattern of patterns) {
-      const found = searchDir(publishedModelsDir, pattern);
-      if (found) return found;
-    }
+  for (const pattern of patterns) {
+    const manifestMatch = findRuleHubModelPath(ROOT_DIR, pattern);
+    if (manifestMatch) return manifestMatch;
+  }
+
+  for (const pattern of patterns) {
+    const target = `${pattern}.bngl`.toLowerCase();
+    const found = ruleHubBnglPaths.find((filePath) => path.basename(filePath).toLowerCase() === target);
+    if (found) return found;
   }
 
   return null;

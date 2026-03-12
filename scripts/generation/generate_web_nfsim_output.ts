@@ -5,8 +5,14 @@ import { parseBNGL } from '../services/parseBNGL';
 import { BNGXMLWriter } from '@bngplayground/engine';
 import { execSync } from 'child_process';
 
+function resolveRuleHubRoot(): string {
+    const fromEnv = process.env.RULEHUB_ROOT?.trim();
+    if (fromEnv) return path.resolve(fromEnv);
+    return path.resolve(process.cwd(), '..', 'RuleHub');
+}
+
 async function run() {
-    const modelPath = path.resolve('public/models/polymer.bngl');
+    const modelPath = path.join(resolveRuleHubRoot(), 'Tutorials', 'General', 'polymer', 'polymer.bngl');
     console.log(`Loading model: ${modelPath}`);
     const bnglContent = fs.readFileSync(modelPath, 'utf8');
 

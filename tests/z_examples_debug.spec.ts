@@ -8,6 +8,7 @@ import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParse
 import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator';
 import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical';
 import type { BNGLModel } from '../types';
+import { findRuleHubModelPath } from './helpers/rulehub';
 
 const MAX_SPECIES = 1500;
 const MAX_REACTIONS = 20000;
@@ -107,14 +108,9 @@ describe('Example gallery models', () => {
     it(`generates a finite network for ${example.name}`, async () => {
       let code = example.code;
       if (!code) {
-        // Try to load from public/models, example-models, etc.
-        const searchDirs = ['public/models', 'example-models', 'published-models'];
-        for (const dir of searchDirs) {
-          const filePath = path.join(process.cwd(), dir, `${example.id}.bngl`);
-          if (fs.existsSync(filePath)) {
-            code = fs.readFileSync(filePath, 'utf8');
-            break;
-          }
+        const filePath = findRuleHubModelPath(example.id, process.cwd());
+        if (filePath && fs.existsSync(filePath)) {
+          code = fs.readFileSync(filePath, 'utf8');
         }
       }
 

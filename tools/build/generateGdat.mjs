@@ -12,7 +12,10 @@ const DEFAULT_PERL_CMD = process.env.PERL_CMD ?? 'perl';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(scriptDir, '..');
-const defaultExampleDir = resolve(projectRoot, 'example-models');
+const ruleHubRoot = process.env.RULEHUB_ROOT
+  ? resolve(process.env.RULEHUB_ROOT)
+  : resolve(projectRoot, '..', 'RuleHub');
+const defaultExampleDir = resolve(ruleHubRoot, 'Contributed', 'BNGPlayground_Examples');
 const defaultOutDir = resolve(projectRoot, 'tests/fixtures/gdat');
 const NATIVE_NFSIM = resolve(projectRoot, 'src/wasm/nfsim/nfsim-src/build_native/NFsim.exe');
 const BUNDLED_NFSIM = resolve(projectRoot, 'bionetgen_python/bng-win/bin/NFsim.exe');
@@ -29,7 +32,7 @@ Options:
   --out <dir>       Output directory for GDAT files (default: tests/fixtures/gdat)
   --bng2 <path>     Path to BNG2.pl (default: env BNG2_PATH or bundled path)
   --perl <cmd>      Perl executable to invoke (default: env PERL_CMD or perl)
-  --examples        Use all BNGL files under example-models (default when no paths)
+  --examples        Use all BNGL files under RuleHub Contributed/BNGPlayground_Examples (default when no paths)
   --verbose         Print full BioNetGen output while running models
   --help            Show this message
 
@@ -88,6 +91,9 @@ function parseArgs(argv) {
 function ensureBng2Exists(bng2Path) {
   if (!existsSync(bng2Path)) {
     throw new Error(`BNG2.pl not found at ${bng2Path}. Provide --bng2 or set BNG2_PATH.`);
+  }
+  if (!existsSync(defaultExampleDir)) {
+    throw new Error(`RuleHub example directory not found at ${defaultExampleDir}. Set RULEHUB_ROOT or pass explicit model paths.`);
   }
 }
 

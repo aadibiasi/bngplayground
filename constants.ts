@@ -14,8 +14,6 @@ import { Example } from './types.ts';
 
 
 // Native Tutorials
-import ABTutorial from './published-models/native-tutorials/AB/AB.bngl?raw';
-// import translateSBMLTutorial from './published-models/native-tutorials/SBML/translateSBML.bngl?raw';
 
 // fceri_fyn import is maintained as it was missing from original set
 
@@ -32,7 +30,33 @@ export const CHART_COLORS = [
 ];
 
 // Set AB model as default
-export const INITIAL_BNGL_CODE = ABTutorial;
+export const INITIAL_BNGL_CODE = `begin model
+begin parameters
+  k_bind 1
+  k_unbind 0.1
+end parameters
+
+begin molecule types
+  A(b)
+  B(a)
+end molecule types
+
+begin seed species
+  A(b) 100
+  B(a) 100
+end seed species
+
+begin observables
+  Molecules FreeA A(b)
+  Molecules BoundAB A(b!1).B(a!1)
+end observables
+
+begin reaction rules
+  A(b) + B(a) <-> A(b!1).B(a!1) k_bind,k_unbind
+end reaction rules
+
+simulate({method=>"ode",t_end=>10,n_steps=>10})
+end model`;
 
 // Models that successfully parse and simulate with BNG2.pl (ODE/SSA compatible)
 // Models not in this list either:

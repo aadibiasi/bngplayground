@@ -18,9 +18,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import { listAllRuleHubModelFiles } from '../../tools/rulehubLocal';
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = path.resolve(THIS_DIR, '..');
+const PROJECT_ROOT = path.resolve(THIS_DIR, '..', '..');
 const BNG_TEST_OUTPUT_DIR = path.join(PROJECT_ROOT, 'bng_test_output');
 
 const SESSION_DIR = path.join(PROJECT_ROOT, 'artifacts', 'SESSION_2026_01_05_web_output_parity');
@@ -60,7 +61,7 @@ type NoRefName = (typeof NO_REF_SAFE_NAMES)[number];
 
 type GenerationResult = {
 	safeName: NoRefName;
-	source: 'published-models' | 'public/models' | 'example-models' | 'missing';
+	source: 'rulehub-published' | 'rulehub-example' | 'rulehub-validation' | 'rulehub-runtime' | 'rulehub-tutorial' | 'rulehub-pybionetgen' | 'rulehub-other' | 'missing';
 	sourceId?: string;
 	status: 'generated' | 'skipped_exists' | 'bng2_failed' | 'source_missing';
 	elapsedMs?: number;
@@ -125,12 +126,6 @@ function sanitizeActionsKeepFirstOdeSimulateOnly(code: string): string {
 
 type ModelSource = Exclude<GenerationResult['source'], 'missing'>;
 
-const SOURCE_ROOTS: Array<{ source: ModelSource; absRoot: string }> = [
-	{ source: 'published-models', absRoot: path.join(PROJECT_ROOT, 'published-models') },
-	{ source: 'public/models', absRoot: path.join(PROJECT_ROOT, 'public', 'models') },
-	{ source: 'example-models', absRoot: path.join(PROJECT_ROOT, 'example-models') },
-];
-
 const SAFE_NAME_ALIASES: Partial<Record<NoRefName, string[]>> = {
 	ab_tutorial: ['AB'],
 };
@@ -147,18 +142,6 @@ let bnglIndex:
 		>
 	| undefined;
 
-function walkFilesRecursive(dirAbs: string, results: string[]) {
-	if (!fs.existsSync(dirAbs)) return;
-	for (const entry of fs.readdirSync(dirAbs, { withFileTypes: true })) {
-		const abs = path.join(dirAbs, entry.name);
-		if (entry.isDirectory()) {
-			walkFilesRecursive(abs, results);
-			continue;
-		}
-		results.push(abs);
-	}
-}
-
 function buildBnglIndex(): NonNullable<typeof bnglIndex> {
 	const idx = new Map<
 		string,
@@ -170,22 +153,18 @@ function buildBnglIndex(): NonNullable<typeof bnglIndex> {
 		}>
 	>();
 
-	for (const [priority, root] of SOURCE_ROOTS.entries()) {
-		const allFiles: string[] = [];
-		walkFilesRecursive(root.absRoot, allFiles);
-		for (const abs of allFiles) {
-			if (!abs.toLowerCase().endsWith('.bngl')) continue;
-			const base = path.basename(abs, '.bngl');
+	const allFiles = listAllRuleHubModelFiles(PROJECT_ROOT);
+	for (const [priority, entry] of allFiles.entries()) {
+		const base = path.basename(entry.filePath, '.bngl');
 			const key = normalizeKey(base);
-			const fileRel = path.relative(PROJECT_ROOT, abs).replace(/\\/g, '/');
+			const fileRel = entry.relativePath;
 			const arr = idx.get(key) ?? [];
-			arr.push({ fileAbs: abs, source: root.source, fileRel, priority });
+			arr.push({ fileAbs: entry.filePath, source: entry.source, fileRel, priority });
 			idx.set(key, arr);
-		}
 	}
 
 	// Prefer earlier roots and then shorter rel paths (more canonical-ish).
-	for (const [key, entries] of idx.entries()) {
+	return { safeName, source: 'missing', status: 'source_missing', error: 'Model source not found in local RuleHub checkout' };
 		entries.sort((a, b) => a.priority - b.priority || a.fileRel.length - b.fileRel.length || a.fileRel.localeCompare(b.fileRel));
 		idx.set(key, entries);
 	}
@@ -229,7 +208,7 @@ function generateOne(safeName: NoRefName): GenerationResult {
 
 	const loaded = loadModelCodeBySafeName(safeName);
 	if (loaded.source === 'missing') {
-		return { safeName, source: 'missing', status: 'source_missing', error: 'Model source not found in constants or public/models' };
+		return { safeName, source: 'missing', status: 'source_missing', error: 'Model source not found in local RuleHub checkout' };
 	}
 
 	ensureDir(WORK_ROOT);

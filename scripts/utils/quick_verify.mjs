@@ -7,7 +7,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const BNG_PATH = "C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl";
-const PUBLISHED_MODELS_DIR = path.resolve(__dirname, '../published-models');
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+const RULEHUB_ROOT = process.env.RULEHUB_ROOT
+  ? path.resolve(process.env.RULEHUB_ROOT)
+  : path.resolve(PROJECT_ROOT, '..', 'RuleHub');
+const PUBLISHED_MODELS_DIR = path.join(RULEHUB_ROOT, 'Published');
 const TEMP_DIR = path.resolve(__dirname, '../temp_verify');
 
 // Ensure temp dir exists

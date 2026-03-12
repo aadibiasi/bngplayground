@@ -4,6 +4,7 @@ import { execSync } from 'child_process';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
 import { BNGXMLWriter } from '@bngplayground/engine';
 import { resolveBNG2Paths } from '../tools/bng2-paths';
+import { findRuleHubModelPath } from './helpers/rulehub';
 
 const DEFAULT_BNG2_PATH = resolveBNG2Paths().bng2pl ?? '';
 const DEFAULT_PERL_CMD = process.env.PERL_CMD ?? 'perl';
@@ -14,16 +15,22 @@ const DEFAULT_PERL_CMD = process.env.PERL_CMD ?? 'perl';
  */
 
 describe('Polymer Compartment Parity Tests', () => {
+  const polymerPath = findRuleHubModelPath('polymer');
+  const polymerDraftPath = findRuleHubModelPath('polymer_draft');
+
+  if (!polymerPath || !polymerDraftPath) {
+    throw new Error('Could not locate polymer parity models in local RuleHub checkout');
+  }
   
   const testModels = [
     {
       name: 'polymer',
-      path: 'public/models/polymer.bngl',
+      path: polymerPath,
       timeout: 60000
     },
     {
       name: 'polymer_draft',
-      path: 'public/models/polymer_draft.bngl',
+      path: polymerDraftPath,
       timeout: 60000
     }
   ];

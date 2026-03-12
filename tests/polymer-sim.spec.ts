@@ -3,10 +3,11 @@ import { describe, it, expect } from 'vitest';
 import { runNFsimSimulation } from '@bngplayground/engine';
 import { parseBNGL } from '../services/parseBNGL';
 import * as fs from 'fs';
+import { findRuleHubModelPath } from './helpers/rulehub';
 
 describe('Polymer Model Simulation', () => {
     it('should simulate polymer model (NFsim or fallback)', async () => {
-        const bnglCode = fs.readFileSync('public/models/polymer.bngl', 'utf-8');
+        const bnglCode = fs.readFileSync(findRuleHubModelPath('polymer')!, 'utf-8');
         const model = parseBNGL(bnglCode);
         
         console.log('Running simulation...');

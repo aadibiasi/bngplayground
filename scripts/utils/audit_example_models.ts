@@ -5,9 +5,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { parseBNGL } from '../services/parseBNGL.ts';
-import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator.ts';
-import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser.ts';
+import { parseBNGL } from '../../services/parseBNGL.ts';
+import { NetworkGenerator } from '../../packages/engine/src/services/graph/NetworkGenerator.ts';
+import { BNGLParser } from '../../packages/engine/src/services/graph/core/BNGLParser.ts';
+import { listRuleHubExampleModelFiles } from '../../tools/rulehubLocal';
 import { createSolver } from '@bngplayground/engine';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -163,15 +164,14 @@ async function auditModel(filePath: string): Promise<AuditResult> {
 }
 
 async function main() {
-    const modelsDir = path.join(__dirname, '../example-models');
-    const files = fs.readdirSync(modelsDir).filter(f => f.endsWith('.bngl'));
+    const files = listRuleHubExampleModelFiles(process.cwd());
     
     console.log(`Auditing ${files.length} example models...\n`);
     
     const results: AuditResult[] = [];
     
     for (const file of files) {
-        const result = await auditModel(path.join(modelsDir, file));
+        const result = await auditModel(file);
         results.push(result);
         
         const color = result.status === 'PASS' ? '\x1b[32m' 

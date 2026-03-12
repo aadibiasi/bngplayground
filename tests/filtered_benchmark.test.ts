@@ -10,6 +10,7 @@ import * as path from 'path';
 import { parseBNGL } from '../services/parseBNGL';
 import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
+import { collectBnglFiles, resolveRuleHubRoot } from './helpers/rulehub';
 
 interface BenchmarkResult {
     model: string;
@@ -24,15 +25,13 @@ const results: BenchmarkResult[] = [];
 
 describe('All Example Models Benchmark', () => {
     const projectRoot = path.resolve(__dirname, '..');
-    const exampleModelsDir = path.join(projectRoot, 'example-models');
-
-    // Get all .bngl files in example-models
-    const exampleModels = fs.existsSync(exampleModelsDir)
-        ? fs.readdirSync(exampleModelsDir)
-            .filter(f => f.endsWith('.bngl'))
-            .map(f => f.replace('.bngl', ''))
-            .sort()
+    const exampleModelsDir = path.join(resolveRuleHubRoot(projectRoot), 'Contributed', 'BNGPlayground_Examples');
+    const exampleModelFiles = fs.existsSync(exampleModelsDir)
+        ? collectBnglFiles(exampleModelsDir).sort()
         : [];
+
+    // Get all migrated example models
+    const exampleModels = exampleModelFiles.map((filePath) => path.basename(filePath, '.bngl'));
 
     console.log(`Example models directory: ${exampleModelsDir}`);
     console.log(`Found ${exampleModels.length} models`);
@@ -43,7 +42,10 @@ describe('All Example Models Benchmark', () => {
         const result: BenchmarkResult = { model: modelName, status: 'error', timeMs: 0 };
 
         try {
-            const bnglPath = path.join(exampleModelsDir, `${modelName}.bngl`);
+            const bnglPath = exampleModelFiles.find((filePath) => path.basename(filePath, '.bngl') === modelName);
+            if (!bnglPath) {
+                throw new Error(`Model not found in RuleHub examples: ${modelName}`);
+            }
             const bnglContent = fs.readFileSync(bnglPath, 'utf-8');
             const model = parseBNGL(bnglContent);
 

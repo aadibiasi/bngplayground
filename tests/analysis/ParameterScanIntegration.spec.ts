@@ -3,12 +3,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parseBNGLWithANTLR } from '@bngplayground/engine';
 import type { BNGLModel } from '../../types';
+import { collectBnglFiles, resolveRuleHubRoot } from '../helpers/rulehub';
 
-// returns list of BNGL model file paths under example-models
+// returns list of BNGL model file paths under migrated RuleHub examples
 function listExampleModels(): string[] {
-    const dir = path.join(process.cwd(), 'example-models');
+    const dir = path.join(resolveRuleHubRoot(process.cwd()), 'Contributed', 'BNGPlayground_Examples');
     try {
-        return fs.readdirSync(dir).filter(f => f.endsWith('.bngl')).map(f => path.join(dir, f));
+        return collectBnglFiles(dir).sort();
     } catch {
         return [];
     }

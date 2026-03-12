@@ -4,7 +4,10 @@ import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = path.resolve(__dirname, '..');
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+const RULEHUB_ROOT = process.env.RULEHUB_ROOT
+  ? path.resolve(process.env.RULEHUB_ROOT)
+  : (fs.existsSync(path.resolve(PROJECT_ROOT, '..', 'RuleHub')) ? path.resolve(PROJECT_ROOT, '..', 'RuleHub') : null);
 const BNG2_PL = 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
 const PERL = 'perl';
 
@@ -19,14 +22,17 @@ function trimToModelEnd(code) {
 }
 
 async function main() {
-  const constantsContent = fs.readFileSync(path.join(PROJECT_ROOT, 'constants.ts'), 'utf8');
-  const match = constantsContent.match(/export const BNG2_COMPATIBLE_MODELS = new Set\(\[([\s\S]*?)\]\);/);
-  if (!match) {
-    console.error('Could not find BNG2_COMPATIBLE_MODELS in constants.ts');
+  const manifestPath = RULEHUB_ROOT ? path.join(RULEHUB_ROOT, 'manifest.json') : null;
+  if (!manifestPath || !fs.existsSync(manifestPath)) {
+    console.error('Could not find a local RuleHub checkout. Set RULEHUB_ROOT before running this script.');
     process.exit(1);
   }
 
-  const ids = [...match[1].matchAll(/'(.*?)'/g)].map(m => m[1]);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const ids = (Array.isArray(manifest) ? manifest : manifest.models)
+    .filter((entry) => entry?.bng2_compatible)
+    .map((entry) => entry.id)
+    .filter(Boolean);
   console.log(`Verifying ${ids.length} models (Parsing ONLY)...`);
 
   const results = { pass: [], fail: [] };
@@ -38,9 +44,10 @@ async function main() {
 
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i];
-    const bnglPath = path.join(PROJECT_ROOT, 'public', 'models', `${id}.bngl`);
+    const entry = (Array.isArray(manifest) ? manifest : manifest.models).find((item) => item.id === id);
+    const bnglPath = entry?.path ? path.join(RULEHUB_ROOT, entry.path) : null;
     
-    if (!fs.existsSync(bnglPath)) {
+    if (!bnglPath || !fs.existsSync(bnglPath)) {
       results.fail.push({ id, error: 'File missing' });
       continue;
     }

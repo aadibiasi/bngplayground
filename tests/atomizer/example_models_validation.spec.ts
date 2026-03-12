@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, readFileSync, copyFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, basename } from 'node:path';
+import { join, basename, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { resolveBNG2Paths } from '../../tools/bng2-paths';
 import { parseBNGL } from '../../services/parseBNGL';
@@ -9,7 +9,21 @@ import { parseBNGL } from '../../services/parseBNGL';
 const DEFAULT_BNG2_PATH = resolveBNG2Paths().bng2pl ?? '';
 const DEFAULT_PERL_CMD = process.env.PERL_CMD ?? 'perl';
 
-const EXAMPLES_DIR = 'example-models';
+const RULEHUB_EXAMPLES_DIR = process.env.RULEHUB_ROOT
+  ? join(resolve(process.env.RULEHUB_ROOT), 'Contributed', 'BNGPlayground_Examples')
+  : join(resolve(process.cwd(), '..', 'RuleHub'), 'Contributed', 'BNGPlayground_Examples');
+
+function collectBnglFiles(dir: string, results: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collectBnglFiles(fullPath, results);
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.bngl')) {
+      results.push(fullPath);
+    }
+  }
+  return results;
+}
 
 function runBNG2(modelPath: string, outdir: string): boolean {
   const modelName = basename(modelPath);
@@ -29,8 +43,13 @@ async function convertAndParse(xml: string) {
   return { bngl, parsed };
 }
 
-// Discover candidate .bngl files in example-models (top-level only)
-const EXAMPLES = readdirSync(EXAMPLES_DIR).filter(f => f.toLowerCase().endsWith('.bngl')).map(f => join(EXAMPLES_DIR, f));
+const EXAMPLES = (() => {
+  try {
+    return collectBnglFiles(RULEHUB_EXAMPLES_DIR);
+  } catch {
+    return [];
+  }
+})();
 
 describe('Example models validation (BNG->SBML->convert->parse)', () => {
   for (const model of EXAMPLES) {
@@ -58,7 +77,7 @@ describe('Example models validation (BNG->SBML->convert->parse)', () => {
       // Basic sanity checks: counts should be non-zero and comparable types
       expect(parsed.moleculeTypes.length).toBeGreaterThanOrEqual(1);
       expect(parsed.species.length).toBeGreaterThanOrEqual(1);
-      expect(parsed.reactionRules.length).toBeGreaterThanOrEqual(1);
+      expect(parsed.reactionRules?.length ?? 0).toBeGreaterThanOrEqual(1);
 
       // If original model parses, try to compare high-level counts (where available)
       if (origParsed && origParsed.moleculeTypes) {

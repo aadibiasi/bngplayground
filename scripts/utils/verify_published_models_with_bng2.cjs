@@ -3,7 +3,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const crypto = require('crypto');
 
-const PROJECT_ROOT = path.resolve(__dirname, '..');
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 
 const DEFAULT_BNG2_PL =
   'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
@@ -18,14 +18,25 @@ const ONLY_ID = (process.env.ONLY_ID || '').trim();
 const VERIFY_MODE = (process.env.VERIFY_MODE || 'ode_outputs').trim().toLowerCase();
 
 // VERIFY_SCOPE:
-// - 'published' (default): scan only published-models/
-// - 'example': scan only example-models/
-// - 'both': scan published-models/ and example-models/
+// - 'published' (default): scan RuleHub Published/
+// - 'example': scan RuleHub Contributed/BNGPlayground_Examples/
+// - 'both': scan both RuleHub locations
 // Back-compat: INCLUDE_EXAMPLE_MODELS=1 implies VERIFY_SCOPE='both'.
 let VERIFY_SCOPE = (process.env.VERIFY_SCOPE || 'published').trim().toLowerCase();
 const INCLUDE_EXAMPLE_MODELS = (process.env.INCLUDE_EXAMPLE_MODELS || '').trim() === '1';
 if (INCLUDE_EXAMPLE_MODELS && VERIFY_SCOPE === 'published') VERIFY_SCOPE = 'both';
 if (!['published', 'example', 'both'].includes(VERIFY_SCOPE)) VERIFY_SCOPE = 'published';
+
+function resolveRuleHubRoot(projectRoot) {
+  const fromEnv = process.env.RULEHUB_ROOT && process.env.RULEHUB_ROOT.trim();
+  if (fromEnv) {
+    const resolved = path.resolve(fromEnv);
+    if (fs.existsSync(resolved)) return resolved;
+  }
+
+  const sibling = path.resolve(projectRoot, '..', 'RuleHub');
+  return fs.existsSync(sibling) ? sibling : null;
+}
 
 function stripBnglCommentLines(code) {
   return code.replace(/^\s*#.*$/gm, '');
@@ -208,13 +219,18 @@ function main() {
     process.exit(2);
   }
 
+  const ruleHubRoot = resolveRuleHubRoot(PROJECT_ROOT);
+  if (!ruleHubRoot) {
+    console.error('RuleHub checkout not found. Set RULEHUB_ROOT or place RuleHub beside this repo.');
+    process.exit(2);
+  }
+
   const roots = [];
   if (VERIFY_SCOPE === 'published' || VERIFY_SCOPE === 'both') {
-    // Scan all published-models (including native tutorials).
-    roots.push(path.join(PROJECT_ROOT, 'published-models'));
+    roots.push(path.join(ruleHubRoot, 'Published'));
   }
   if (VERIFY_SCOPE === 'example' || VERIFY_SCOPE === 'both') {
-    roots.push(path.join(PROJECT_ROOT, 'example-models'));
+    roots.push(path.join(ruleHubRoot, 'Contributed', 'BNGPlayground_Examples'));
   }
 
   const candidates = [];
@@ -242,10 +258,10 @@ function main() {
   if (ONLY_ID) console.log('ONLY_ID:', ONLY_ID);
   const labelBase =
     VERIFY_SCOPE === 'example'
-      ? 'Example-model'
+      ? 'RuleHub example model'
       : VERIFY_SCOPE === 'both'
-        ? 'Published+example model'
-        : 'Published-model';
+        ? 'RuleHub published+example model'
+        : 'RuleHub published model';
   console.log(
     VERIFY_MODE === 'parse'
       ? `${labelBase} candidates (all .bngl):`

@@ -17,14 +17,33 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PROJECT_ROOT = path.resolve(__dirname, '..');
-const EXAMPLE_MODELS_DIR = path.join(PROJECT_ROOT, 'example-models');
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+
+function resolveRuleHubRoot(projectRoot) {
+    const fromEnv = process.env.RULEHUB_ROOT?.trim();
+    if (fromEnv) {
+        const resolved = path.resolve(fromEnv);
+        if (fs.existsSync(resolved)) return resolved;
+    }
+
+    const sibling = path.resolve(projectRoot, '..', 'RuleHub');
+    return fs.existsSync(sibling) ? sibling : null;
+}
+
+const RULEHUB_ROOT = resolveRuleHubRoot(PROJECT_ROOT);
+const EXAMPLE_MODELS_DIR = RULEHUB_ROOT
+    ? path.join(RULEHUB_ROOT, 'Contributed', 'BNGPlayground_Examples')
+    : null;
 const REPORT_FILE = path.join(PROJECT_ROOT, 'example_models_parity_report.txt');
 
 console.log('='.repeat(80));
 console.log('Example Models Parity Validation');
 console.log('='.repeat(80));
 console.log('');
+
+if (!EXAMPLE_MODELS_DIR) {
+    throw new Error('RuleHub checkout not found. Set RULEHUB_ROOT or place RuleHub beside this repo.');
+}
 
 // Get list of all example model names (without .bngl extension)
 const exampleModelNames = fs.readdirSync(EXAMPLE_MODELS_DIR)

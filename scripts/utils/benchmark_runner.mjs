@@ -12,36 +12,57 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+
+function resolveRuleHubRoot(projectRoot) {
+  const fromEnv = process.env.RULEHUB_ROOT?.trim();
+  if (fromEnv) {
+    const resolved = path.resolve(fromEnv);
+    if (fs.existsSync(resolved)) return resolved;
+  }
+
+  const sibling = path.resolve(projectRoot, '..', 'RuleHub');
+  return fs.existsSync(sibling) ? sibling : null;
+}
+
+function collectBnglFilesRecursive(rootDir, results = []) {
+  if (!fs.existsSync(rootDir)) return results;
+
+  for (const entry of fs.readdirSync(rootDir, { withFileTypes: true })) {
+    const fullPath = path.join(rootDir, entry.name);
+    if (entry.isDirectory()) {
+      collectBnglFilesRecursive(fullPath, results);
+    } else if (entry.isFile() && entry.name.endsWith('.bngl')) {
+      results.push(fullPath);
+    }
+  }
+
+  return results;
+}
 
 const BNG2_PATH = 'c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
-const TEST_DIR = path.join(__dirname, 'bng_test_output');
+const TEST_DIR = path.join(PROJECT_ROOT, 'bng_test_output');
 
-// Find all .bngl files in published-models and example-models
+// Find all .bngl files in the local RuleHub checkout.
 function findBnglFiles() {
   const models = [];
-  const dirs = ['published-models', 'example-models'];
+  const ruleHubRoot = resolveRuleHubRoot(PROJECT_ROOT);
+  if (!ruleHubRoot) return models;
+
+  const dirs = [
+    path.join(ruleHubRoot, 'Published'),
+    path.join(ruleHubRoot, 'Contributed', 'BNGPlayground_Examples'),
+  ];
 
   for (const dir of dirs) {
-    const dirPath = path.join(__dirname, dir);
-    if (!fs.existsSync(dirPath)) continue;
-
-    // Recursively find all .bngl files
-    function scanDir(currentPath) {
-      const entries = fs.readdirSync(currentPath, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = path.join(currentPath, entry.name);
-        if (entry.isDirectory()) {
-          scanDir(fullPath);
-        } else if (entry.name.endsWith('.bngl')) {
-          models.push({
-            path: fullPath,
-            name: entry.name.replace('.bngl', ''),
-            category: path.relative(__dirname, currentPath)
-          });
-        }
-      }
+    const files = collectBnglFilesRecursive(dir);
+    for (const fullPath of files) {
+      models.push({
+        path: fullPath,
+        name: path.basename(fullPath, '.bngl'),
+        category: path.relative(ruleHubRoot, path.dirname(fullPath))
+      });
     }
-    scanDir(dirPath);
   }
 
   return models;

@@ -4,7 +4,24 @@ import path from 'path';
 import { execSync } from 'child_process';
 import os from 'os';
 
-const modelsDir = path.join(process.cwd(), 'example-models');
+function resolveRuleHubRoot(projectRoot: string): string | null {
+    const fromEnv = process.env.RULEHUB_ROOT?.trim();
+    if (fromEnv) {
+        const resolved = path.resolve(fromEnv);
+        if (fs.existsSync(resolved)) return resolved;
+    }
+
+    const sibling = path.resolve(projectRoot, '..', 'RuleHub');
+    return fs.existsSync(sibling) ? sibling : null;
+}
+
+const projectRoot = process.cwd();
+const ruleHubRoot = resolveRuleHubRoot(projectRoot);
+if (!ruleHubRoot) {
+    throw new Error('RuleHub checkout not found. Set RULEHUB_ROOT or place RuleHub beside this repo.');
+}
+
+const modelsDir = path.join(ruleHubRoot, 'Contributed', 'BNGPlayground_Examples');
 const outputDir = path.join(process.cwd(), 'web_output');
 
 // Configuration
@@ -189,6 +206,7 @@ function updateBNGL(modelName: string, newTEnd: number) {
 }
 
 function main() {
+    void os.platform();
     const models = getModels();
     console.log(`Found ${models.length} models.`);
 

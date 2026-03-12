@@ -89,7 +89,7 @@ interface EditorPanelProps {
     endColumn?: number;
   };
   // New: allow importing SBML from the editor load button and exporting SBML
-  onImportSBML?: (file: File) => void;
+  onImportSBML?: (file: File) => void | Promise<void>;
   onExportSBML?: () => void;
   onExportSedML?: () => void;
   onExportOMEX?: () => void;

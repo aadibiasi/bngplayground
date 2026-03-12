@@ -1,5 +1,5 @@
 /**
- * Scan published-models to find all models with active (uncommented) simulate_ode commands
+ * Scan RuleHub Published to find all models with active (uncommented) simulate_ode commands
  * Excludes simulate_nf (stochastic) models
  */
 import fs from 'fs';
@@ -8,8 +8,21 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PROJECT_ROOT = path.resolve(__dirname, '..');
-const PUBLISHED_MODELS_DIR = path.join(PROJECT_ROOT, 'published-models');
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+
+function resolveRuleHubRoot(projectRoot) {
+    const fromEnv = process.env.RULEHUB_ROOT?.trim();
+    if (fromEnv) {
+        const resolved = path.resolve(fromEnv);
+        if (fs.existsSync(resolved)) return resolved;
+    }
+
+    const sibling = path.resolve(projectRoot, '..', 'RuleHub');
+    return fs.existsSync(sibling) ? sibling : null;
+}
+
+const RULEHUB_ROOT = resolveRuleHubRoot(PROJECT_ROOT);
+const PUBLISHED_MODELS_DIR = RULEHUB_ROOT ? path.join(RULEHUB_ROOT, 'Published') : null;
 
 function findAllBnglFiles(dir) {
     const files = [];
@@ -57,10 +70,16 @@ function hasActiveOdeSimulate(content) {
 }
 
 function main() {
-    console.log('Scanning published-models for active ODE simulation commands...\n');
+    if (!PUBLISHED_MODELS_DIR) {
+        console.error('RuleHub checkout not found. Set RULEHUB_ROOT or place RuleHub beside this repo.');
+        process.exitCode = 1;
+        return;
+    }
+
+    console.log('Scanning RuleHub Published for active ODE simulation commands...\n');
 
     const allFiles = findAllBnglFiles(PUBLISHED_MODELS_DIR);
-    console.log(`Found ${allFiles.length} BNGL files in published-models\n`);
+    console.log(`Found ${allFiles.length} BNGL files in RuleHub Published\n`);
 
     const odeModels = [];
     const stochasticModels = [];

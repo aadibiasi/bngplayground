@@ -17,7 +17,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const EXAMPLE_MODELS_DIR = path.join(PROJECT_ROOT, 'example-models');
+const RULEHUB_ROOT = process.env.RULEHUB_ROOT
+    ? path.resolve(process.env.RULEHUB_ROOT)
+    : path.resolve(PROJECT_ROOT, '..', 'RuleHub');
+const EXAMPLE_MODELS_DIR = path.join(RULEHUB_ROOT, 'Contributed', 'BNGPlayground_Examples');
 const BNG_TEST_OUTPUT_DIR = path.join(PROJECT_ROOT, 'bng_test_output');
 const BNG2_PATH = 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
 const REPORT_FILE = path.join(PROJECT_ROOT, 'example_models_validation_report.json');
@@ -247,12 +250,22 @@ async function main() {
         process.exit(1);
     }
 
-    const bnglFiles = fs.readdirSync(EXAMPLE_MODELS_DIR)
-        .filter(f => f.endsWith('.bngl'))
-        .map(f => path.join(EXAMPLE_MODELS_DIR, f))
-        .sort();
+    const collectBnglFiles = (dir, results = []) => {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+                collectBnglFiles(fullPath, results);
+            } else if (entry.isFile() && entry.name.endsWith('.bngl')) {
+                results.push(fullPath);
+            }
+        }
+        return results;
+    };
 
-    console.log(`Found ${bnglFiles.length} BNGL files\n`);
+    const bnglFiles = collectBnglFiles(EXAMPLE_MODELS_DIR).sort();
+
+    console.log(`Found ${bnglFiles.length} RuleHub example BNGL files\n`);
 
     /** @type {ValidationResult[]} */
     const results = [];

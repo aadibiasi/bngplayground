@@ -4,10 +4,11 @@ import { execSync } from 'node:child_process';
 
 const PROJECT_ROOT = process.cwd();
 const CONSTANTS_PATH = path.join(PROJECT_ROOT, 'constants.ts');
+const VALIDATION_FIXTURE_PATH = path.join(PROJECT_ROOT, 'tests', 'fixtures', 'validation_models.ts');
 
 // 1. Get full analysis of valid/candidate models
 console.log("Analyzing models...");
-const analysisJson = execSync('node scripts/analyze_models.mjs').toString();
+const analysisJson = execSync('node scripts/analysis/analyze_models.mjs').toString();
 const analysis = JSON.parse(analysisJson);
 
 // Candidates are 'passed' and 'untestedOde'
@@ -22,7 +23,7 @@ const constantsContent = fs.readFileSync(CONSTANTS_PATH, 'utf8');
 // Simple heuristic: check if the Model ID is mentioned in constants.ts
 // (Note: This might miss if ID is different from filename, but usually they match or are close)
 // Better: check if the filename is imported?
-// Imports look like: import barua2013 from './published-models/cell-regulation/Barua_2013.bngl?raw';
+// Imports now point at RuleHub-backed absolute model paths gathered by analysis.
 
 const missingModels = [];
 
@@ -50,9 +51,7 @@ const sanitizeIdentifier = (name) => name.replace(/[^a-zA-Z0-9]/g, '_');
 
 for (const model of missingModels) {
     const safeId = sanitizeIdentifier(model.name);
-    // Path relative to constants.ts (root) -> ./public/models/...
-    // model.path is absolute. 
-    // We assume file is in public/models
+    // model.path is absolute and now points at the local RuleHub checkout.
     
     if (!model.path) {
         console.warn(`Skipping model ${model.name} due to missing path.`);
@@ -82,3 +81,4 @@ console.log("\n// --- COPY BELOW TO DEFINE NEW ARRAY ---\n");
 console.log(`const INTERNAL_VALIDATION_MODELS: Example[] = [\n${arrayEntries.join('\n')}\n];`);
 
 console.log("\n// --- ADD '...INTERNAL_VALIDATION_MODELS' TO MODEL_CATEGORIES 'Internal Validation Models' list ---");
+console.log(`\n// Validation fixture source currently lives at: ${VALIDATION_FIXTURE_PATH}`);

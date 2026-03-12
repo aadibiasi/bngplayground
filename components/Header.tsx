@@ -22,7 +22,7 @@ interface HeaderProps {
   onExportOMEX?: () => void;
   onExportNET?: () => void;
   onExportBNGL?: () => void;
-  onImportSBML?: (file: File) => void;
+  onImportSBML?: (file: File) => void | Promise<void>;
   code?: string;
   modelName?: string | null;
   modelId?: string | null;

@@ -15,12 +15,11 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { listAllRuleHubModelFiles } from '../../tools/rulehubLocal';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const PUBLISHED_MODELS_DIR = path.resolve(__dirname, '../published-models');
-const EXAMPLE_MODELS_DIR = path.resolve(__dirname, '../example-models');
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 
 interface IntramolecularInfo {
   model: string;
@@ -126,25 +125,8 @@ function analyzeModel(filePath: string): IntramolecularInfo | null {
   return info;
 }
 
-function getBnglFiles(dir: string): string[] {
-  let files: string[] = [];
-  const items = fs.readdirSync(dir, { withFileTypes: true });
-  for (const item of items) {
-    const fullPath = path.join(dir, item.name);
-    if (item.isDirectory()) {
-      files = files.concat(getBnglFiles(fullPath));
-    } else if (item.name.endsWith('.bngl')) {
-      files.push(fullPath);
-    }
-  }
-  return files;
-}
-
 async function run() {
-  const files = [
-    ...getBnglFiles(PUBLISHED_MODELS_DIR),
-    ...getBnglFiles(EXAMPLE_MODELS_DIR)
-  ];
+  const files = listAllRuleHubModelFiles(PROJECT_ROOT).map((entry) => entry.filePath);
 
   console.log(`Analyzing ${files.length} models for TRUE intramolecular reactions...\n`);
   console.log('True intramolecular = bonds forming WITHIN a single molecule (ring closure)\n');

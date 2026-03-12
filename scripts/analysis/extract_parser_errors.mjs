@@ -13,8 +13,27 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PROJECT_ROOT = path.resolve(__dirname, '..');
-const EXAMPLE_MODELS_DIR = path.join(PROJECT_ROOT, 'example-models');
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+
+function resolveRuleHubRoot(projectRoot) {
+    const fromEnv = process.env.RULEHUB_ROOT?.trim();
+    if (fromEnv) {
+        const resolved = path.resolve(fromEnv);
+        if (fs.existsSync(resolved)) return resolved;
+    }
+
+    const sibling = path.resolve(projectRoot, '..', 'RuleHub');
+    return fs.existsSync(sibling) ? sibling : null;
+}
+
+const RULEHUB_ROOT = resolveRuleHubRoot(PROJECT_ROOT);
+const EXAMPLE_MODELS_DIR = RULEHUB_ROOT
+    ? path.join(RULEHUB_ROOT, 'Contributed', 'BNGPlayground_Examples')
+    : null;
+
+if (!EXAMPLE_MODELS_DIR) {
+    throw new Error('RuleHub checkout not found. Set RULEHUB_ROOT or place RuleHub beside this repo.');
+}
 
 const FAILED_MODELS = [
     'beta-adrenergic-response',

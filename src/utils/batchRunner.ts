@@ -1,5 +1,4 @@
 import { bnglService } from '../../services/bnglService';
-import { MODEL_CATEGORIES, BNG2_EXCLUDED_MODELS, NFSIM_MODELS } from '../../constants';
 import {
     normalizeFilterNames,
     safeModelName,
@@ -12,6 +11,9 @@ import {
 } from '@bngplayground/engine';
 import { downloadCsv } from './download';
 import { loadModelCode } from '../../services/modelLoader';
+import { loadModelCatalog, getModelCatalogSync } from '../../services/modelCatalog';
+
+const NFSIM_MODELS = new Set<string>();
 
 // If you need extra verbosity for batch runner, flip this to true locally
 const VERBOSE_BATCH_RUNNER = false;
@@ -57,8 +59,8 @@ const appReporter: BatchReporter = {
 
 export async function runModels(modelNames?: string[]) {
     const filter = normalizeFilterNames(modelNames);
-    const allModelsRaw = MODEL_CATEGORIES.flatMap(c => c.models);
-    const allModels = Array.from(new Map(allModelsRaw.map(m => [m.id || m.name, m])).values());
+    const catalog = await loadModelCatalog();
+    const allModels = catalog.examples;
     const modelsToProcess = filter
         ? allModels.filter(m => {
             const n = m.name.toLowerCase();
@@ -103,10 +105,9 @@ export async function runModels(modelNames?: string[]) {
 }
 
 export function getModelEntries() {
-    const all = MODEL_CATEGORIES.flatMap(c => c.models)
-        .filter(m => !BNG2_EXCLUDED_MODELS.has(m.id) && !BNG2_EXCLUDED_MODELS.has(m.name));
-    const deduped = Array.from(new Map(all.map(m => [m.id || m.name, m])).values());
-    return deduped.map(m => ({ id: m.id || m.name, name: m.name }));
+    const catalog = getModelCatalogSync();
+    const all = catalog?.examples ?? [];
+    return all.map(m => ({ id: m.id || m.name, name: m.name }));
 }
 
 export function getModelNames() {
@@ -118,7 +119,7 @@ export async function runAllModels() {
 }
 
 export async function runNfSimModels() {
-    const nfModels = Array.from(NFSIM_MODELS).filter(m => !BNG2_EXCLUDED_MODELS.has(m));
+    const nfModels = Array.from(NFSIM_MODELS);
     return runModels(nfModels);
 }
 

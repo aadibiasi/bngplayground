@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { listAllRuleHubModelFiles } from '../../tools/rulehubLocal';
 
 type RootCause =
   | 'pass'
@@ -40,8 +41,6 @@ type ModelMethod = 'ode' | 'ssa' | 'nfsim' | 'unspecified';
 const ROOT = process.cwd();
 const REPORT_JSON = path.join(ROOT, 'artifacts', 'parity_layer_report.all.json');
 const OUT_MD = path.join(ROOT, 'artifacts', 'parity_layer_report_full_document.md');
-const PUBLIC_MODELS_DIR = path.join(ROOT, 'public', 'models');
-const EXAMPLE_MODELS_DIR = path.join(ROOT, 'example-models');
 
 function normalizeKey(raw: string): string {
   return raw
@@ -51,13 +50,6 @@ function normalizeKey(raw: string): string {
     .replace(/\(\d+\)$/, '')
     .replace(/\s+/g, '')
     .replace(/[^a-z0-9]+/g, '');
-}
-
-function listBnglFiles(dirPath: string): string[] {
-  if (!fs.existsSync(dirPath)) return [];
-  return fs.readdirSync(dirPath)
-    .filter((f) => f.toLowerCase().endsWith('.bngl'))
-    .map((f) => path.join(dirPath, f));
 }
 
 function findBestBnglPath(modelName: string, candidates: string[]): string | null {
@@ -136,7 +128,7 @@ function main(): void {
   }
 
   const reports = JSON.parse(fs.readFileSync(REPORT_JSON, 'utf8')) as LayeredReport[];
-  const bnglCandidates = [...listBnglFiles(PUBLIC_MODELS_DIR), ...listBnglFiles(EXAMPLE_MODELS_DIR)];
+  const bnglCandidates = listAllRuleHubModelFiles(ROOT).map((entry) => entry.filePath);
 
   const methodByModel = new Map<string, ModelMethod>();
   for (const r of reports) {

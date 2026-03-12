@@ -1,14 +1,14 @@
 /**
  * Validation Model Names
  * 
- * These models are loaded from public/models/{name}.bngl files.
- * The inline code has been extracted to separate files.
+ * These models are resolved from the RuleHub migration set.
+ * They were originally stored in the playground validation model bundle.
  * 
- * To load a model's code, use: `fetch('/models/{name}.bngl')`
- * or `fs.readFileSync('public/models/{name}.bngl')` in Node.js scripts.
+ * To load a model's code in tests or scripts, resolve the BNGL path through the
+ * shared RuleHub helpers instead of reading from a local public asset directory.
  */
 
-// All validation models available in public/models/
+// All validation models available in the migrated RuleHub validation/runtime sets
 export const VALIDATION_MODEL_NAMES: string[] = [
   'AB',
   'ABC',

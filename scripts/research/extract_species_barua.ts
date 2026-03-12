@@ -1,13 +1,19 @@
 
 import fs from 'fs';
 import path from 'path';
-import { parseBNGL } from '../services/parseBNGL';
-import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator';
+import { parseBNGL } from '../../services/parseBNGL';
+import { NetworkGenerator } from '../../packages/engine/src/services/graph/NetworkGenerator';
+import { findRuleHubModelPath } from '../../tools/rulehubLocal';
 
-const MODEL_PATH = path.join(process.cwd(), 'published-models/cell-regulation/Barua_2013.bngl');
+const PROJECT_ROOT = process.cwd();
+const MODEL_PATH = findRuleHubModelPath(PROJECT_ROOT, 'Barua_2013');
 const OUTPUT_FILE = path.join(process.cwd(), 'barua_sim_species.txt');
 
 async function run() {
+	if (!MODEL_PATH) {
+		throw new Error('Unable to locate Barua_2013 in the local RuleHub checkout.');
+	}
+
   console.log(`Reading model from ${MODEL_PATH}...`);
   const bnglContent = fs.readFileSync(MODEL_PATH, 'utf-8');
   const model = parseBNGL(bnglContent);

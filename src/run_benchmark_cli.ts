@@ -5,6 +5,7 @@ import { createRequire } from 'module';
 import { parseBNGLWithANTLR, NetworkGenerator, BNGLParser, GraphCanonicalizer } from '@bngplayground/engine';
 import type { BNGLModel } from '../types';
 import modelsList from './gdat_models.json';
+import { collectBnglFilesRecursive, resolveRuleHubRoot } from '../tools/rulehubLocal';
 
 // Simple polyfill for worker environment if needed
 if (typeof global !== 'undefined') {
@@ -384,9 +385,10 @@ async function runBenchmark() {
     // 1. Discovery Phase
     console.log('[Benchmark] Discovering all models...');
     const projectRoot = process.cwd();
+    const ruleHubRoot = resolveRuleHubRoot(projectRoot);
     const dirsToScan = [
-        path.join(projectRoot, 'public/models'),
-        path.join(projectRoot, 'published-models/literature'),
+        ruleHubRoot ? path.join(ruleHubRoot, 'Contributed', 'BNGPlayground_PublicRuntime') : '',
+        ruleHubRoot ? path.join(ruleHubRoot, 'Published') : '',
     ];
 
     // Build map of known configs
@@ -394,7 +396,7 @@ async function runBenchmark() {
     const finalModels: any[] = [...modelsList];
 
     for (const d of dirsToScan) {
-        const files = findBnglFiles(d);
+        const files = d ? collectBnglFilesRecursive(d) : [];
         for (const f of files) {
             const basename = path.basename(f, '.bngl');
             if (!configuredModels.has(basename)) {

@@ -16,14 +16,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../');
-const CONSTANTS_TS_PATH = path.join(ROOT, 'constants.ts');
-
-// Model directories to scan
-// NOTE: include the whole 'published-models' tree so newly added subfolders (e.g., Mallela_2022, Ordyan_2020, PyBNG) are automatically discovered.
-const MODEL_DIRS = [
-  'example-models',
-  'published-models',
-];
+const DEFAULT_RULEHUB_MANIFEST_URL = process.env.VITE_RULEHUB_MANIFEST_URL || 'https://raw.githubusercontent.com/akutuva21/rulehub/master/manifest.json';
 
 // Initialize the embedding model (runs locally, no API needed)
 // Using all-MiniLM-L6-v2: small (22MB), fast, good quality
@@ -184,80 +177,63 @@ function extractTags(relativePath, content) {
   return tags.length > 0 ? tags : ['Example Models'];
 }
 
-/**
- * Scan directories for BNGL files and extract metadata.
- */
-function scanModels() {
-  const models = [];
+function joinUrl(base, relative) {
+  return `${base.replace(/\/$/, '')}/${relative.replace(/^\//, '')}`;
+}
 
-  for (const dir of MODEL_DIRS) {
-    const fullDir = path.join(ROOT, dir);
-    if (!fs.existsSync(fullDir)) {
-      console.warn(`Directory not found: ${dir}`);
-      continue;
-    }
+async function loadRuleHubManifest() {
+  const response = await fetch(DEFAULT_RULEHUB_MANIFEST_URL);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch RuleHub manifest: ${response.status}`);
+  }
 
-    const scanDir = (currentDir) => {
-      const entries = fs.readdirSync(currentDir, { withFileTypes: true });
-
-      for (const entry of entries) {
-        const fullPath = path.join(currentDir, entry.name);
-
-        if (entry.isDirectory()) {
-          scanDir(fullPath);
-        } else if (entry.name.endsWith('.bngl')) {
-          const content = fs.readFileSync(fullPath, 'utf-8');
-          const relativePath = path.relative(ROOT, fullPath);
-
-          models.push({
-            id: relativePath.replace(/\\/g, '/').replace(/\.bngl$/, ''),
-            filename: entry.name,
-            path: relativePath.replace(/\\/g, '/'),
-            tags: extractTags(relativePath.replace(/\\/g, '/'), content),
-            searchText: extractSearchableText(entry.name, content),
-            observables: extractObservables(content),
-            simulationMode: extractSimulationMode(content),
-          });
-        }
-      }
-    };
-
-    scanDir(fullDir);
+  const payload = await response.json();
+  const models = Array.isArray(payload) ? payload : payload.models;
+  if (!Array.isArray(models)) {
+    throw new Error('RuleHub manifest payload is invalid.');
   }
 
   return models;
 }
 
 /**
- * Read BNG2-compatible model IDs from constants.ts (source of truth for app filtering).
+ * Load model metadata and BNGL text from RuleHub.
  */
-function loadBng2CompatibleModelIds() {
-  if (!fs.existsSync(CONSTANTS_TS_PATH)) {
-    throw new Error(`constants.ts not found at ${CONSTANTS_TS_PATH}`);
+async function scanModels() {
+  const models = [];
+
+  const manifest = await loadRuleHubManifest();
+  const manifestBase = DEFAULT_RULEHUB_MANIFEST_URL.replace(/\/manifest\.json(?:[?#].*)?$/i, '');
+
+  for (const entry of manifest) {
+    if (!entry?.bng2_compatible || !entry?.path) {
+      continue;
+    }
+
+    const rawUrl = entry.rawUrl || joinUrl(manifestBase, entry.path);
+    try {
+      const response = await fetch(rawUrl);
+      if (!response.ok) {
+        console.warn(`Skipping ${entry.id}: fetch failed (${response.status})`);
+        continue;
+      }
+
+      const content = await response.text();
+      models.push({
+        id: entry.id,
+        filename: entry.file || path.basename(entry.path),
+        path: entry.path,
+        tags: entry.tags?.length ? entry.tags : extractTags(entry.path, content),
+        searchText: `${entry.name || entry.id} ${entry.description || ''} ${extractSearchableText(path.basename(entry.path), content)}`.toLowerCase(),
+        observables: extractObservables(content),
+        simulationMode: extractSimulationMode(content),
+      });
+    } catch (error) {
+      console.warn(`Skipping ${entry.id}: ${error.message}`);
+    }
   }
 
-  const source = fs.readFileSync(CONSTANTS_TS_PATH, 'utf-8');
-  const setBlockMatch = source.match(
-    /export\s+const\s+BNG2_COMPATIBLE_MODELS\s*=\s*new\s+Set\s*\(\s*\[([\s\S]*?)\]\s*\)/m
-  );
-
-  if (!setBlockMatch) {
-    throw new Error('Could not find BNG2_COMPATIBLE_MODELS in constants.ts');
-  }
-
-  const ids = new Set();
-  const literalRegex = /'([^']+)'/g;
-  let match;
-  while ((match = literalRegex.exec(setBlockMatch[1])) !== null) {
-    const id = match[1].trim();
-    if (id) ids.add(id);
-  }
-
-  if (ids.size === 0) {
-    throw new Error('Parsed zero IDs from BNG2_COMPATIBLE_MODELS in constants.ts');
-  }
-
-  return ids;
+  return models;
 }
 
 /**
@@ -265,30 +241,8 @@ function loadBng2CompatibleModelIds() {
  */
 async function generateEmbeddings() {
   console.log('Scanning for BNGL models...');
-  let models = scanModels();
+  const models = await scanModels();
   console.log(`Found ${models.length} models.`);
-
-  // Filter by constants.ts source of truth
-  const compatibleIds = loadBng2CompatibleModelIds();
-  const compatibleIdsLower = new Set(Array.from(compatibleIds, id => id.toLowerCase()));
-
-  const before = models.length;
-  models = models.filter(model => {
-    const modelIdNoExt = model.id.replace(/\.bngl$/i, '');
-    const modelPathNoExt = model.path.replace(/\.bngl$/i, '');
-    const baseName = path.basename(model.path, '.bngl');
-
-    const candidates = [
-      modelIdNoExt,
-      modelPathNoExt,
-      baseName,
-      path.basename(modelIdNoExt),
-      path.basename(modelPathNoExt),
-    ];
-
-    return candidates.some(candidate => compatibleIds.has(candidate) || compatibleIdsLower.has(candidate.toLowerCase()));
-  });
-  console.log(`Filtered models by BNG2_COMPATIBLE_MODELS: ${before} -> ${models.length}`);
 
   // Support DRY_RUN for testing the filter without running the heavy embedding step
   if (process.env.DRY_RUN) {

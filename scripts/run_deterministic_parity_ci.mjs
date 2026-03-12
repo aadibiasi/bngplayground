@@ -3,9 +3,20 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
-const constantsPath = path.join(root, 'constants.ts');
 const webOutputDir = path.join(root, 'web_output');
-const publicModelsDir = path.join(root, 'public', 'models');
+
+function resolveRuleHubRoot() {
+  const fromEnv = process.env.RULEHUB_ROOT?.trim();
+  if (fromEnv) return path.resolve(fromEnv);
+
+  const sibling = path.resolve(root, '..', 'RuleHub');
+  if (fs.existsSync(sibling)) return sibling;
+
+  return null;
+}
+
+const ruleHubRoot = resolveRuleHubRoot();
+const ruleHubManifestPath = ruleHubRoot ? path.join(ruleHubRoot, 'manifest.json') : null;
 
 function die(message, code = 2) {
   console.error(`[det-parity] ${message}`);
@@ -52,17 +63,21 @@ function removeIfExists(filePath) {
 }
 
 function extractDeterministicModelList() {
-  if (!fs.existsSync(constantsPath)) {
-    die(`constants.ts not found at ${constantsPath}`);
+  if (!ruleHubManifestPath || !fs.existsSync(ruleHubManifestPath)) {
+    die('RuleHub manifest not found. Set RULEHUB_ROOT to a local RuleHub checkout before running this script.');
   }
-  const txt = fs.readFileSync(constantsPath, 'utf8');
-  const match = txt.match(/BNG2_COMPATIBLE_MODELS\s*=\s*new\s+Set(?:<[^>]+>)?\s*\(\s*\[([\s\S]*?)\]\s*\)/m);
-  if (!match) {
-    die('Could not parse BNG2_COMPATIBLE_MODELS from constants.ts');
-  }
-  const body = match[1];
-  const models = [...body.matchAll(/["'`]([^"'`]+)["'`]/g)].map((m) => m[1]).filter(Boolean);
+  const manifest = JSON.parse(fs.readFileSync(ruleHubManifestPath, 'utf8'));
+  const models = (Array.isArray(manifest) ? manifest : manifest.models)
+    .filter((entry) => entry?.bng2_compatible)
+    .map((entry) => entry.id)
+    .filter(Boolean);
   return [...new Set(models)].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
+function loadRuleHubManifest() {
+  if (!ruleHubManifestPath || !fs.existsSync(ruleHubManifestPath)) return [];
+  const manifest = JSON.parse(fs.readFileSync(ruleHubManifestPath, 'utf8'));
+  return Array.isArray(manifest) ? manifest : manifest.models ?? [];
 }
 
 function normalizeKey(raw) {
@@ -76,10 +91,12 @@ function normalizeKey(raw) {
 
 function findBnglPath(modelName) {
   const key = normalizeKey(modelName);
-  if (!fs.existsSync(publicModelsDir)) return null;
-  const files = fs.readdirSync(publicModelsDir).filter((f) => f.toLowerCase().endsWith('.bngl'));
-  const exact = files.find((f) => normalizeKey(f) === key);
-  if (exact) return path.join(publicModelsDir, exact);
+  const manifest = loadRuleHubManifest();
+  const entry = manifest.find((item) => {
+    const candidates = [item.id, item.path, item.file, path.basename(item.path || '', '.bngl')].filter(Boolean);
+    return candidates.some((candidate) => normalizeKey(candidate) === key);
+  });
+  if (entry?.path && ruleHubRoot) return path.join(ruleHubRoot, entry.path);
   return null;
 }
 
@@ -128,7 +145,7 @@ function filterOdeLikeModels(models) {
   for (const model of models) {
     const bnglPath = findBnglPath(model);
     if (!bnglPath || !fs.existsSync(bnglPath)) {
-      skipped.push({ model, method: 'missing_in_public_models' });
+      skipped.push({ model, method: 'missing_in_rulehub_checkout' });
       continue;
     }
     const text = fs.readFileSync(bnglPath, 'utf8');

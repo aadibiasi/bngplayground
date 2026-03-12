@@ -5,13 +5,14 @@ import { fileURLToPath } from 'url';
 import { NetworkGenerator } from '@bngplayground/engine';
 import { BNGLParser } from '@bngplayground/engine';
 import { parseBNGL } from '../services/parseBNGL.ts';
+import { listRuleHubPublishedModelFiles, resolveRuleHubRoot } from '../rulehubLocal.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Path to BNG2.pl provided by user
 const BNG_PATH = "C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl";
-const PUBLISHED_MODELS_DIR = path.resolve(__dirname, '../published-models');
+const PROJECT_ROOT = path.resolve(__dirname, '..');
 
 interface VerificationResult {
   model: string;
@@ -220,6 +221,11 @@ async function verifyModel(filePath: string): Promise<VerificationResult> {
 }
 
 async function run() {
+  const ruleHubRoot = resolveRuleHubRoot(PROJECT_ROOT);
+  if (!ruleHubRoot) {
+    throw new Error('RuleHub checkout not found. Set RULEHUB_ROOT before running this script.');
+  }
+
   const results: VerificationResult[] = [];
 
   // Find all .bngl files recursively
@@ -237,7 +243,7 @@ async function run() {
     return files;
   }
 
-  const files = getBnglFiles(PUBLISHED_MODELS_DIR).filter(f => f.includes('tlbr.bngl'));
+  const files = listRuleHubPublishedModelFiles(PROJECT_ROOT).filter(f => f.toLowerCase().includes('tlbr.bngl'));
   console.log(`Found ${files.length} models to verify.`);
 
   for (const file of files) {

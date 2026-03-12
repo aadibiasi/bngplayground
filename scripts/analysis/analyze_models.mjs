@@ -5,15 +5,49 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PROJECT_ROOT = path.join(__dirname, '..');
-const MODELS_DIR = path.join(PROJECT_ROOT, 'public/models');
-const VALIDATION_FILE = path.join(PROJECT_ROOT, 'validation_models.ts');
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+const VALIDATION_FILE = path.join(PROJECT_ROOT, 'tests', 'fixtures', 'validation_models.ts');
 const CONSTANTS_FILE = path.join(PROJECT_ROOT, 'constants.ts');
 
+function resolveRuleHubRoot(projectRoot) {
+    const fromEnv = process.env.RULEHUB_ROOT?.trim();
+    if (fromEnv) {
+        const resolved = path.resolve(fromEnv);
+        if (fs.existsSync(resolved)) return resolved;
+    }
+
+    const sibling = path.resolve(projectRoot, '..', 'RuleHub');
+    return fs.existsSync(sibling) ? sibling : null;
+}
+
+function collectBnglFilesRecursive(rootDir, results = []) {
+    if (!fs.existsSync(rootDir)) return results;
+
+    for (const entry of fs.readdirSync(rootDir, { withFileTypes: true })) {
+        const fullPath = path.join(rootDir, entry.name);
+        if (entry.isDirectory()) {
+            collectBnglFilesRecursive(fullPath, results);
+        } else if (entry.isFile() && entry.name.endsWith('.bngl')) {
+            results.push(fullPath);
+        }
+    }
+
+    return results;
+}
+
+const RULEHUB_ROOT = resolveRuleHubRoot(PROJECT_ROOT);
+if (!RULEHUB_ROOT) {
+    throw new Error('RuleHub checkout not found. Set RULEHUB_ROOT or place RuleHub beside this repo.');
+}
+
+const MODELS_DIRS = [
+    path.join(RULEHUB_ROOT, 'Published'),
+    path.join(RULEHUB_ROOT, 'Contributed', 'BNGPlayground_Examples'),
+];
+
 // 1. Get all model files
-const files = fs.readdirSync(MODELS_DIR)
-    .filter(f => f.endsWith('.bngl'))
-    .map(f => f.slice(0, -5)); // remove .bngl
+const modelFiles = MODELS_DIRS.flatMap((dir) => collectBnglFilesRecursive(dir));
+const files = modelFiles.map((filePath) => path.basename(filePath, '.bngl'));
 
 // 2. Get Validated models
 const valContent = fs.readFileSync(VALIDATION_FILE, 'utf8');
@@ -32,8 +66,8 @@ if (excludedMatch) {
 }
 
 // 4. Analyze each model
-const results = files.map(name => {
-    const filePath = path.join(MODELS_DIR, `${name}.bngl`);
+const results = modelFiles.map(filePath => {
+    const name = path.basename(filePath, '.bngl');
     const content = fs.readFileSync(filePath, 'utf8');
     const lines = content.split('\n');
     

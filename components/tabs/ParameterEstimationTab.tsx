@@ -8,7 +8,7 @@ import { Card } from '../ui/Card';
 import { DataTable } from '../ui/DataTable';
 import { EmptyState } from '../ui/EmptyState';
 import { StatusMessage } from '../ui/StatusMessage';
-import { CHART_COLORS } from '../../constants';
+import { CHART_COLORS } from '../../chartColors';
 import { TimeSeriesChart, TimeSeriesSeries } from '../charts/TimeSeriesChart';
 import { parseExperimentalData, ExperimentalDataPoint } from '../../src/services/data/experimentalData';
 import { fitParameters, FitAlgorithm } from '../../services/optimization/paramFitter';

@@ -1,7 +1,0 @@
-models:
-  - file: Jackson_MI.bngl
-    id: Jackson_MI
-    name: "Jackson MI"
-    description: "reporting period (1 d)"
-    tags: []
-    bng2_compatible: true

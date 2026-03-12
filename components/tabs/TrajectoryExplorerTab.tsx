@@ -12,7 +12,7 @@ import {
 } from 'recharts';
 import { BNGLModel, SimulationResults, SimulationOptions } from '../../types';
 import { bnglWorkerPool } from '../../services/BnglWorkerPool';
-import { CHART_COLORS } from '../../constants';
+import { CHART_COLORS } from '../../chartColors';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { TimeSeriesChart, TimeSeriesSeries } from '../charts/TimeSeriesChart';

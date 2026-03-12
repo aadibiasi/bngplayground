@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { Atomizer } from '../atomizer-ts/src/index';
+import { findRuleHubModelPath } from '../../tools/rulehubLocal';
 
 // libsbmljs uses 'self', which is not defined in Node.js
 if (typeof self === 'undefined') {
@@ -382,7 +383,6 @@ async function main() {
     }
     const data = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     const passModels = data.pass;
-    const publicModelsDir = path.resolve('public/models');
 
     const modelsArg = process.argv.find(a => a.startsWith('--models='));
     const modelsFilter = modelsArg ? modelsArg.split('=')[1].split(',') : process.argv.slice(2).filter(a => !a.startsWith('--'));
@@ -409,7 +409,11 @@ async function main() {
         const idx = allResults.findIndex(r => r.model === modelId);
         if (idx !== -1) allResults.splice(idx, 1);
 
-        const modelPath = path.join(publicModelsDir, `${modelId}.bngl`);
+        const modelPath = findRuleHubModelPath(process.cwd(), modelId);
+        if (!modelPath) {
+            console.warn(`> Skipping ${modelId} (not found in local RuleHub checkout)`);
+            continue;
+        }
         await verifyModel(modelPath);
         fs.writeFileSync('public_atomizer_report.json', JSON.stringify(allResults, null, 2));
     }

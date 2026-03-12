@@ -3,7 +3,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const crypto = require('crypto');
 
-const PROJECT_ROOT = path.resolve(__dirname, '..');
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 
 const DEFAULT_BNG2_PL =
     'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
@@ -13,8 +13,24 @@ const PERL = process.env.PERL || 'perl';
 const TIMEOUT_MS = Number(process.env.BNG2_TIMEOUT_MS || 120_000);
 const ONLY_ID = (process.env.ONLY_ID || '').trim();
 
-// Scan public/models/
-const MODEL_ROOT = path.join(PROJECT_ROOT, 'public', 'models');
+function resolveRuleHubRoot(projectRoot) {
+    const fromEnv = process.env.RULEHUB_ROOT && process.env.RULEHUB_ROOT.trim();
+    if (fromEnv) {
+        const resolved = path.resolve(fromEnv);
+        if (fs.existsSync(resolved)) return resolved;
+    }
+
+    const sibling = path.resolve(projectRoot, '..', 'RuleHub');
+    return fs.existsSync(sibling) ? sibling : null;
+}
+
+const RULEHUB_ROOT = resolveRuleHubRoot(PROJECT_ROOT);
+if (!RULEHUB_ROOT) {
+    console.error('RuleHub checkout not found. Set RULEHUB_ROOT or place RuleHub beside this repo.');
+    process.exit(2);
+}
+
+const MODEL_ROOT = path.join(RULEHUB_ROOT, 'Published');
 
 // Extract BNG2_EXCLUDED_MODELS from constants.ts
 function getExcludedModels() {

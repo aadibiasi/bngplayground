@@ -8,13 +8,14 @@ import { promisify } from 'util';
 import { exec } from 'child_process';
 import { fileURLToPath } from 'url';
 import { parseGraphML } from './brute_force_viz';
-import { parseBNGL } from '../services/parseBNGL';
-import { buildAtomRuleGraph } from '../services/visualization/arGraphBuilder';
-import { exportArGraphToGraphML } from '../services/visualization/arGraphExporter';
+import { parseBNGL } from '../../services/parseBNGL';
+import { buildAtomRuleGraph } from '../../services/visualization/arGraphBuilder';
+import { exportArGraphToGraphML } from '../../services/visualization/arGraphExporter';
 import { resolveBNG2Paths } from '../../tools/bng2-paths';
+import { findRuleHubModelPath } from '../../tools/rulehubLocal';
 
 function getCompatibleModels(): string[] {
-  const constantsPath = path.resolve(__dirname, '../constants.ts');
+  const constantsPath = path.resolve(__dirname, '../../constants.ts');
   const content = fs.readFileSync(constantsPath, 'utf8');
   // Extract models between the Set definition start/end in constants.ts
   const match = content.match(/export const BNG2_COMPATIBLE_MODELS = new Set\(\[([\s\S]*?)\]\);/);
@@ -172,9 +173,8 @@ async function maybeGenerateWebGraphML(file: string): Promise<string> {
     const models = getCompatibleModels();
     console.log(`Running batch comparison for ${models.length} models...`);
     for (const modelName of models) {
-      // Models are in public/models/*.bngl
-      const bnglPath = path.resolve(__dirname, `../public/models/${modelName}.bngl`);
-      if (!fs.existsSync(bnglPath)) {
+      const bnglPath = findRuleHubModelPath(process.cwd(), modelName);
+      if (!bnglPath || !fs.existsSync(bnglPath)) {
         console.warn(`Skipping missing model: ${modelName}`);
         continue;
       }

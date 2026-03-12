@@ -6,6 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { getRuleHubManifestBnglPaths } from '../rulehubLocal';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,20 +19,6 @@ const NORMALIZED_BNG2_EXCLUDED = (() => {
   try {
     const txt = fs.readFileSync(constantsPath, 'utf8');
     const m = txt.match(/export\s+const\s+BNG2_EXCLUDED_MODELS\s*=\s*new\s+Set\(\[([\s\S]*?)\]\)/m);
-    if (!m) return new Set<string>();
-    const listBody = m[1];
-    const items = listBody.split(',').map(s => s.replace(/["'`\s]/g, '').trim()).filter(Boolean);
-    return new Set(items.map(k => k.toLowerCase().replace(/[^a-z0-9]+/g, '')));
-  } catch (e) {
-    return new Set<string>();
-  }
-})();
-
-const NORMALIZED_BNG2_COMPATIBLE = (() => {
-  const constantsPath = path.join(PROJECT_ROOT, 'constants.ts');
-  try {
-    const txt = fs.readFileSync(constantsPath, 'utf8');
-    const m = txt.match(/export\s+const\s+BNG2_COMPATIBLE_MODELS\s*=\s*new\s+Set\(\[([\s\S]*?)\]\)/m);
     if (!m) return new Set<string>();
     const listBody = m[1];
     const items = listBody.split(',').map(s => s.replace(/["'`\s]/g, '').trim()).filter(Boolean);
@@ -85,8 +72,6 @@ const WEB_OUTPUT_DIR = path.join(PROJECT_ROOT, 'web_output');
 const BNG_OUTPUT_DIR = process.env.BNG_OUTPUT_DIR
   ? path.resolve(PROJECT_ROOT, process.env.BNG_OUTPUT_DIR)
   : path.join(PROJECT_ROOT, 'tests', 'fixtures', 'gdat');
-const EXAMPLE_MODELS_DIR = path.join(PROJECT_ROOT, 'example-models');
-const PUBLIC_MODELS_DIR = path.join(PROJECT_ROOT, 'public', 'models');
 
 const SESSION_DIR = path.join(PROJECT_ROOT, 'artifacts', 'SESSION_2026_02_10_web_output_parity');
 
@@ -594,22 +579,7 @@ function getMultiPhaseReference(
 
     const gdatFiles = fs.readdirSync(BNG_OUTPUT_DIR).filter(f => f.toLowerCase().endsWith('.gdat'));
 
-
-    const bnglFiles: string[] = [];
-    if (fs.existsSync(PUBLIC_MODELS_DIR)) {
-      const allPublic = fs.readdirSync(PUBLIC_MODELS_DIR)
-        .filter(f => f.toLowerCase().endsWith('.bngl'))
-        .map(f => path.join(PUBLIC_MODELS_DIR, f));
-
-      if (NORMALIZED_BNG2_COMPATIBLE.size > 0) {
-        bnglFiles.push(...allPublic.filter((fp) => {
-          const key = normalizeKey(path.basename(fp));
-          return NORMALIZED_BNG2_COMPATIBLE.has(key);
-        }));
-      } else {
-        bnglFiles.push(...allPublic);
-      }
-    }
+    const bnglFiles = getRuleHubManifestBnglPaths(PROJECT_ROOT, (entry) => entry.bng2_compatible !== false);
 
     const rawLabel = csvModelLabel(csvFile);
     const baseKey = normalizeKey(rawLabel);

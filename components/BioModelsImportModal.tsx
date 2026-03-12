@@ -19,7 +19,7 @@ import { fetchBioModelsSbml } from '../services/bioModelsImport';
 interface BioModelsImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImportSBML: (file: File) => void;
+  onImportSBML: (file: File) => void | Promise<void>;
 }
 
 export const BioModelsImportModal: React.FC<BioModelsImportModalProps> = ({ isOpen, onClose, onImportSBML }) => {
@@ -35,7 +35,7 @@ export const BioModelsImportModal: React.FC<BioModelsImportModalProps> = ({ isOp
     try {
       const { normalizedId, sbmlText } = await fetchBioModelsSbml(trimmed);
       const file = new File([sbmlText], `${normalizedId}.xml`, { type: 'application/xml' });
-      onImportSBML(file);
+      await onImportSBML(file);
       onClose();
     } catch (e: any) {
       setError(e?.message || String(e));

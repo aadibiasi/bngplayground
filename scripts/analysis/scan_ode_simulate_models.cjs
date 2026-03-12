@@ -29,6 +29,27 @@ function listFilesRecursive(rootDir) {
   return out;
 }
 
+function resolveRuleHubRoot(projectRoot) {
+  const fromEnv = process.env.RULEHUB_ROOT && process.env.RULEHUB_ROOT.trim();
+  if (fromEnv) {
+    const resolved = path.resolve(fromEnv);
+    if (fs.existsSync(resolved)) return resolved;
+  }
+
+  const sibling = path.resolve(projectRoot, '..', 'RuleHub');
+  return fs.existsSync(sibling) ? sibling : null;
+}
+
+function classifyRuleHubRel(rel) {
+  if (rel.startsWith('Published/')) return 'rulehub-published';
+  if (rel.startsWith('Contributed/BNGPlayground_Examples/')) return 'rulehub-example';
+  if (rel.startsWith('Contributed/BNGPlayground_Validation/')) return 'rulehub-validation';
+  if (rel.startsWith('Contributed/BNGPlayground_PublicRuntime/')) return 'rulehub-runtime';
+  if (rel.startsWith('Tutorials/')) return 'rulehub-tutorial';
+  if (rel.startsWith('PyBioNetGen/')) return 'rulehub-pybionetgen';
+  return 'rulehub-other';
+}
+
 function readCompatibleSetFromConstants(constantsPath) {
   const txt = fs.readFileSync(constantsPath, 'utf8');
   // Be tolerant of formatting/CRLF differences in constants.ts.
@@ -45,11 +66,19 @@ function readCompatibleSetFromConstants(constantsPath) {
 
 function main() {
   const projectRoot = process.cwd();
+  const ruleHubRoot = resolveRuleHubRoot(projectRoot);
+  if (!ruleHubRoot) {
+    console.error('RuleHub checkout not found. Set RULEHUB_ROOT or place RuleHub beside this repo.');
+    process.exit(2);
+  }
 
   const roots = [
-    path.join(projectRoot, 'published-models'),
-    path.join(projectRoot, 'example-models'),
-    path.join(projectRoot, 'public', 'models'),
+    path.join(ruleHubRoot, 'Published'),
+    path.join(ruleHubRoot, 'Contributed', 'BNGPlayground_Examples'),
+    path.join(ruleHubRoot, 'Contributed', 'BNGPlayground_Validation'),
+    path.join(ruleHubRoot, 'Contributed', 'BNGPlayground_PublicRuntime'),
+    path.join(ruleHubRoot, 'Tutorials'),
+    path.join(ruleHubRoot, 'PyBioNetGen'),
   ];
 
   const constantsPath = path.join(projectRoot, 'constants.ts');
@@ -59,9 +88,13 @@ function main() {
 
   const candidates = [];
   const byKind = {
-    'published-models': new Set(),
-    'example-models': new Set(),
-    'public/models': new Set(),
+    'rulehub-published': new Set(),
+    'rulehub-example': new Set(),
+    'rulehub-validation': new Set(),
+    'rulehub-runtime': new Set(),
+    'rulehub-tutorial': new Set(),
+    'rulehub-pybionetgen': new Set(),
+    'rulehub-other': new Set(),
   };
 
   for (const root of roots) {
@@ -73,13 +106,13 @@ function main() {
       if (!ODE_SIMULATE_ACTION_RE.test(code)) continue;
 
       const id = path.basename(file, '.bngl');
-      const rel = path.relative(projectRoot, file).replace(/\\/g, '/');
-      if (rel.startsWith('published-models/')) byKind['published-models'].add(id);
-      if (rel.startsWith('example-models/')) byKind['example-models'].add(id);
-      if (rel.startsWith('public/models/')) byKind['public/models'].add(id);
+      const rel = path.relative(ruleHubRoot, file).replace(/\\/g, '/');
+      const kind = classifyRuleHubRel(rel);
+      byKind[kind].add(id);
       candidates.push({
         id,
         rel,
+        kind,
         inCompatibleSet: compatible.has(id),
       });
     }
@@ -104,13 +137,17 @@ function main() {
   console.log(' - NOT in BNG2_COMPATIBLE_MODELS:', uniqueNotInSet.size);
 
   console.log('\nUnique IDs by folder (ODE simulate present):');
-  console.log(' - published-models:', byKind['published-models'].size);
-  console.log(' - example-models:', byKind['example-models'].size);
-  console.log(' - public/models:', byKind['public/models'].size);
+  console.log(' - rulehub-published:', byKind['rulehub-published'].size);
+  console.log(' - rulehub-example:', byKind['rulehub-example'].size);
+  console.log(' - rulehub-validation:', byKind['rulehub-validation'].size);
+  console.log(' - rulehub-runtime:', byKind['rulehub-runtime'].size);
+  console.log(' - rulehub-tutorial:', byKind['rulehub-tutorial'].size);
+  console.log(' - rulehub-pybionetgen:', byKind['rulehub-pybionetgen'].size);
+  console.log(' - rulehub-other:', byKind['rulehub-other'].size);
 
   const visibleLike = new Set([
-    ...[...byKind['published-models']].filter((id) => compatible.has(id)),
-    ...[...byKind['example-models']].filter((id) => compatible.has(id)),
+    ...[...byKind['rulehub-published']].filter((id) => compatible.has(id)),
+    ...[...byKind['rulehub-example']].filter((id) => compatible.has(id)),
   ]);
   console.log(
     `\nApprox “UI visible” unique IDs (published+example AND allowlisted AND ODE simulate): ${visibleLike.size}`
@@ -123,11 +160,10 @@ function main() {
     }
   }
 
-  // Also show if anything in public/models is ODE-simulated (informational).
-  const publicHits = candidates.filter((c) => c.rel.startsWith('public/models/'));
-  if (publicHits.length) {
-    console.log(`\npublic/models ODE-simulated: ${publicHits.length}`);
-    for (const c of publicHits.slice(0, 50)) {
+  const nonVisibleKinds = candidates.filter((c) => !['rulehub-published', 'rulehub-example'].includes(c.kind));
+  if (nonVisibleKinds.length) {
+    console.log(`\nNon-published/example ODE-simulated entries: ${nonVisibleKinds.length}`);
+    for (const c of nonVisibleKinds.slice(0, 50)) {
       console.log(`  ${c.id} -> ${c.rel}`);
     }
   }

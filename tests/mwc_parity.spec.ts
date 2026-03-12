@@ -7,9 +7,10 @@ import { RxnRule } from '../packages/engine/src/services/graph/core/RxnRule';
 import * as fs from 'fs';
 import * as path from 'path';
 import { describe, test, expect, beforeAll } from 'vitest';
+import { findRuleHubModelPath } from './helpers/rulehub';
 
 describe('MWC Energy Model Parity', () => {
-  const mwcBnglPath = path.join(__dirname, '../public/models/mwc.bngl');
+  const mwcBnglPath = findRuleHubModelPath('mwc')!;
   let mwcContent: string;
 
   beforeAll(() => {

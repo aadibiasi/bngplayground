@@ -1,28 +1,9 @@
 
 import fs from 'fs';
 import path from 'path';
+import { listAllRuleHubModelFiles } from '../../tools/rulehubLocal';
 
-// Directories to scan
-const DIRS = [
-    path.resolve('public/models'),
-    path.resolve('published-models'),
-    path.resolve('example-models') // Include this to be thorough
-];
-
-function getBnglFiles(dir, fileList = []) {
-    if (!fs.existsSync(dir)) return fileList;
-    const files = fs.readdirSync(dir);
-    files.forEach(file => {
-        const filePath = path.join(dir, file);
-        const stat = fs.statSync(filePath);
-        if (stat.isDirectory()) {
-            getBnglFiles(filePath, fileList);
-        } else if (file.endsWith('.bngl')) {
-            fileList.push(filePath);
-        }
-    });
-    return fileList;
-}
+const PROJECT_ROOT = process.cwd();
 
 function analyzeFile(filePath) {
     const content = fs.readFileSync(filePath, 'utf8');
@@ -65,10 +46,7 @@ function analyzeFile(filePath) {
 }
 
 function main() {
-    let files = [];
-    DIRS.forEach(dir => getBnglFiles(dir, files));
-    // unique files
-    files = [...new Set(files)];
+    const files = listAllRuleHubModelFiles(PROJECT_ROOT).map((entry) => entry.filePath);
     
     console.log(`Scanning ${files.length} BNGL files...`);
     

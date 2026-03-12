@@ -5,9 +5,12 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PROJECT_ROOT = path.resolve(__dirname, '..');
-const MODELS_DIR = path.join(PROJECT_ROOT, 'published-models');
-const EXAMPLES_DIR = path.join(PROJECT_ROOT, 'example-models');
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+const RULEHUB_ROOT = process.env.RULEHUB_ROOT
+    ? path.resolve(process.env.RULEHUB_ROOT)
+    : path.resolve(PROJECT_ROOT, '..', 'RuleHub');
+const MODELS_DIR = path.join(RULEHUB_ROOT, 'Published');
+const EXAMPLES_DIR = path.join(RULEHUB_ROOT, 'Contributed', 'BNGPlayground_Examples');
 const GDAT_DIR = path.join(PROJECT_ROOT, 'gdat_comparison_output');
 const REPORT_FILE = path.join(PROJECT_ROOT, 'bng2_reference_report.json');
 

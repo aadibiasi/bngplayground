@@ -201,13 +201,34 @@ const MODEL_TRAJ_TOL_OVERRIDE: Record<string, number> = {
 };
 
 const PROJECT_ROOT = ROOT;
+function resolveRuleHubRoot(): string | null {
+  const fromEnv = process.env.RULEHUB_ROOT?.trim();
+  if (fromEnv) return path.resolve(fromEnv);
+
+  const sibling = path.resolve(PROJECT_ROOT, '..', 'RuleHub');
+  if (fs.existsSync(sibling)) return sibling;
+
+  return null;
+}
+
+const RULEHUB_ROOT = resolveRuleHubRoot();
+const RULEHUB_MANIFEST_PATH = RULEHUB_ROOT ? path.join(RULEHUB_ROOT, 'manifest.json') : null;
 const WEB_OUTPUT_DIR = path.join(PROJECT_ROOT, 'web_output');
 const BNG_REFERENCE_ROOT = path.join(PROJECT_ROOT, 'tests', 'fixtures');
 const BNG_NET_DIR = path.join(BNG_REFERENCE_ROOT, 'net');
 const BNG_CDAT_DIR = path.join(BNG_REFERENCE_ROOT, 'cdat');
 const BNG_GDAT_DIR = path.join(BNG_REFERENCE_ROOT, 'gdat');
-const PUBLIC_MODELS_DIR = path.join(PROJECT_ROOT, 'public', 'models');
 const PARITY_ARTIFACTS_DIR = path.join(PROJECT_ROOT, 'artifacts', 'parity_artifacts');
+
+let ruleHubManifestCache: Array<{ id?: string; file?: string; path?: string; bng2_compatible?: boolean }> | null = null;
+
+function loadRuleHubManifest(): Array<{ id?: string; file?: string; path?: string; bng2_compatible?: boolean }> {
+  if (ruleHubManifestCache) return ruleHubManifestCache;
+  if (!RULEHUB_MANIFEST_PATH || !fs.existsSync(RULEHUB_MANIFEST_PATH)) return [];
+  const payload = JSON.parse(fs.readFileSync(RULEHUB_MANIFEST_PATH, 'utf8'));
+  ruleHubManifestCache = Array.isArray(payload) ? payload : payload.models ?? [];
+  return ruleHubManifestCache;
+}
 
 let VERBOSE = true; // Can be overridden with CLI flags
 
@@ -990,10 +1011,11 @@ function bestMatchFile(modelKey: string, candidates: string[]): string | null {
 }
 
 function discoverBngl(modelName: string): string | null {
+  if (!RULEHUB_ROOT) return null;
   const key = normalizeKey(modelName);
-  const candidates = [
-    ...readDirFilesIfExists(PUBLIC_MODELS_DIR, '.bngl'),
-  ];
+  const candidates = loadRuleHubManifest()
+    .map((entry) => entry.path ? path.join(RULEHUB_ROOT, entry.path) : null)
+    .filter((entry): entry is string => Boolean(entry));
   return bestMatchFile(key, candidates);
 }
 
@@ -1522,26 +1544,15 @@ function parseCli(argv: string[]): CliOptions {
 }
 
 function discoverAllModelsFromConstants(): string[] {
-  const constantsPath = path.join(ROOT, 'constants.ts');
-  if (!fs.existsSync(constantsPath)) {
-    throw new Error(`constants.ts not found at ${constantsPath}`);
+  if (!RULEHUB_ROOT) {
+    throw new Error('RULEHUB_ROOT is required for --all model discovery when RuleHub is not available as a local checkout.');
   }
-
-  const txt = fs.readFileSync(constantsPath, 'utf8');
-  const setName = 'BNG2_COMPATIBLE_MODELS';
-  const escapedSetName = escapeRegExp(setName);
-  const setRegex = new RegExp(
-    `${escapedSetName}\\s*=\\s*new\\s+Set(?:<[^>]+>)?\\s*\\(\\s*\\[([\\s\\S]*?)\\]\\s*\\)`,
-    'm'
+  const deduped = dedupeModels(
+    loadRuleHubManifest()
+      .filter((entry) => entry.bng2_compatible)
+      .map((entry) => entry.id)
+      .filter((entry): entry is string => Boolean(entry))
   );
-  const setMatch = txt.match(setRegex);
-  if (!setMatch) {
-    throw new Error(`Could not parse ${setName} from constants.ts`);
-  }
-
-  const listBody = setMatch[1];
-  const literals = [...listBody.matchAll(/["'`]([^"'`]+)["'`]/g)].map((m) => m[1]).filter(Boolean);
-  const deduped = dedupeModels(literals);
 
   const excludedNoSimulate: string[] = [];
   const filtered = deduped.filter((model) => {

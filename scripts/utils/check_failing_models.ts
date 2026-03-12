@@ -1,10 +1,11 @@
 /**
  * Check all failing models with ANTLR parser
- * Searches for models by name in published-models directory
+ * Searches for models by name in the local RuleHub checkout
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { parseBNGLWithANTLR } from '../packages/engine/src/parser/BNGLParserWrapper';
+import { parseBNGLWithANTLR } from '../../packages/engine/src/parser/BNGLParserWrapper';
+import { findRuleHubModelPath } from '../../tools/rulehubLocal';
 
 const MODEL_NAMES = [
     // 20 models that pass BNG2.pl but fail ANTLR (as of 2024-12-20)
@@ -30,30 +31,15 @@ const MODEL_NAMES = [
     'ComplexDegradation',
 ];
 
-function findModelFile(dir: string, name: string): string | null {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-            const found = findModelFile(fullPath, name);
-            if (found) return found;
-        } else if (entry.isFile() && entry.name === `${name}.bngl`) {
-            return fullPath;
-        }
-    }
-    return null;
-}
-
 async function run() {
     const projectRoot = process.cwd();
-    const modelsDir = path.join(projectRoot, 'published-models');
     
     console.log('=== Checking Failing Models with ANTLR Parser ===\n');
     
     const results: { model: string; success: boolean; errors: string[] }[] = [];
     
     for (const modelName of MODEL_NAMES) {
-        const fullPath = findModelFile(modelsDir, modelName);
+        const fullPath = findRuleHubModelPath(projectRoot, modelName);
         
         if (!fullPath) {
             console.log(`SKIP: ${modelName} - File not found`);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea } from 'recharts';
 import { BNGLModel, SimulationResults } from '../types';
-import { CHART_COLORS } from '../constants';
+import { CHART_COLORS } from '../chartColors';
 import { Card } from './ui/Card';
 import { CustomExpression, evaluateExpression } from './ExpressionInputPanel';
 import { computeDynamicObservable } from '@bngplayground/engine';
