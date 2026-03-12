@@ -56,8 +56,15 @@ describe.skipIf(!hasNFsim())('Polymer Model Parity', () => {
         const cmd = `"${nfsimPath}" -xml "polymer.xml" -sim 1 -oSteps 20 -cb -o "${outputFileName}" -ss "${speciesFileName}"`;
 
         try {
-            execSync(cmd, { encoding: 'utf-8', stdio: 'inherit', cwd: testDir });
+            const out = execSync(cmd, { encoding: 'utf-8', stdio: 'pipe', cwd: testDir });
+            if (out?.trim()) {
+                console.log(out);
+            }
         } catch (error: any) {
+            const stdout = typeof error?.stdout === 'string' ? error.stdout : '';
+            const stderr = typeof error?.stderr === 'string' ? error.stderr : '';
+            if (stdout.trim()) console.log(stdout);
+            if (stderr.trim()) console.error(stderr);
             console.error('NFsim execution failed:', error.message);
             const combinedOutput = [error?.message, error?.stdout, error?.stderr].filter(Boolean).join('\n');
             const knownNFsimIncompatibility =
