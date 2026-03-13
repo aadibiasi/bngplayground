@@ -20,12 +20,111 @@ interface ResultsChartProps {
   isSSA?: boolean;   // Flag for SSA (Gillespie)
 }
 
-export function getSelectedSimulationSlice(results: SimulationResults | null, selectedSuffix: string) {
+const MERGED_PHASE_SUFFIX = '__merged_phases__';
+
+function isLikelyMultiPhaseSuffixRun(results: SimulationResults | null, model: BNGLModel | null): boolean {
+  if (!results?.dataBySuffix || !model?.simulationPhases || model.simulationPhases.length < 2) return false;
+  return Object.keys(results.dataBySuffix).length > 1;
+}
+
+function getOrderedSuffixKeys(results: SimulationResults, model: BNGLModel | null): string[] {
+  const suffixMap = results.dataBySuffix;
+  if (!suffixMap) return ['__default__'];
+
+  const present = new Set(Object.keys(suffixMap));
+  const ordered: string[] = [];
+
+  for (const phase of model?.simulationPhases ?? []) {
+    const key = phase.suffix ?? '__default__';
+    if (present.has(key) && !ordered.includes(key)) {
+      ordered.push(key);
+    }
+  }
+
+  for (const key of present) {
+    if (!ordered.includes(key)) {
+      ordered.push(key);
+    }
+  }
+
+  return ordered.length > 0 ? ordered : ['__default__'];
+}
+
+function mergeRowsByTime(rows: Record<string, number>[]): Record<string, number>[] {
+  if (rows.length <= 1) return rows;
+  const sorted = [...rows].sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
+  const merged: Record<string, number>[] = [];
+
+  for (const row of sorted) {
+    const t = row.time;
+    if (merged.length > 0 && Math.abs((merged[merged.length - 1].time ?? 0) - t) < 1e-12) {
+      merged[merged.length - 1] = row;
+    } else {
+      merged.push(row);
+    }
+  }
+
+  return merged;
+}
+
+function mergeSpeciesRowsByTime(
+  suffixOrder: string[],
+  dataBySuffix: Record<string, Record<string, number>[]>,
+  speciesBySuffix?: Record<string, Record<string, number>[]>
+): Record<string, number>[] | undefined {
+  if (!speciesBySuffix) return undefined;
+
+  const tagged: Array<{ time: number; row: Record<string, number> }> = [];
+
+  for (const suffix of suffixOrder) {
+    const dataRows = dataBySuffix[suffix] ?? [];
+    const speciesRows = speciesBySuffix[suffix] ?? [];
+    for (let i = 0; i < speciesRows.length; i++) {
+      const t = dataRows[i]?.time;
+      if (typeof t === 'number' && Number.isFinite(t)) {
+        tagged.push({ time: t, row: speciesRows[i] });
+      }
+    }
+  }
+
+  tagged.sort((a, b) => a.time - b.time);
+
+  const merged: Array<{ time: number; row: Record<string, number> }> = [];
+  for (const item of tagged) {
+    if (merged.length > 0 && Math.abs(merged[merged.length - 1].time - item.time) < 1e-12) {
+      merged[merged.length - 1] = item;
+    } else {
+      merged.push(item);
+    }
+  }
+
+  return merged.map((entry) => entry.row);
+}
+
+export function getSelectedSimulationSlice(results: SimulationResults | null, selectedSuffix: string, model: BNGLModel | null) {
   if (!results) {
     return {
       sourceData: [] as Record<string, number>[],
       sourceSpeciesData: undefined as Record<string, number>[] | undefined,
       selectedResults: null as SimulationResults | null,
+    };
+  }
+
+  if (selectedSuffix === MERGED_PHASE_SUFFIX && results.dataBySuffix) {
+    const suffixOrder = getOrderedSuffixKeys(results, model);
+    const mergedData = mergeRowsByTime(
+      suffixOrder.flatMap((suffix) => results.dataBySuffix?.[suffix] ?? [])
+    );
+    const mergedSpeciesData = mergeSpeciesRowsByTime(suffixOrder, results.dataBySuffix, results.speciesDataBySuffix);
+
+    return {
+      sourceData: mergedData,
+      sourceSpeciesData: mergedSpeciesData,
+      selectedResults: {
+        ...results,
+        data: mergedData,
+        speciesData: mergedSpeciesData,
+      },
     };
   }
 
@@ -136,7 +235,7 @@ const CustomLegend = (props: any) => {
 import { downloadCsv } from '../src/utils/download';
 
 function exportAsCSV(data: Record<string, any>[], headers: string[], suffixName?: string) {
-  const sfx = !suffixName || suffixName === '__default__' ? '' : `_${suffixName}`;
+  const sfx = !suffixName || suffixName === '__default__' || suffixName === MERGED_PHASE_SUFFIX ? '' : `_${suffixName}`;
   const filename = `simulation_results_${new Date().toISOString().slice(0, 10)}${sfx}.csv`;
   downloadCsv(data, headers, filename);
 }
@@ -226,12 +325,17 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
   const [xAxisScale, setXAxisScale] = useState<'linear' | 'log'>('linear');
   const [yAxisScale, setYAxisScale] = useState<'linear' | 'log'>('linear');
   const [selectedSuffix, setSelectedSuffix] = useState<string>('__default__');
+  const useMergedPhaseView = useMemo(
+    () => isLikelyMultiPhaseSuffixRun(results, model),
+    [results, model]
+  );
 
   const availableSuffixes = useMemo(() => {
+    if (useMergedPhaseView) return [MERGED_PHASE_SUFFIX];
     if (!results?.dataBySuffix) return ['__default__'];
     const keys = Object.keys(results.dataBySuffix);
     return keys.length > 0 ? keys : ['__default__'];
-  }, [results]);
+  }, [results, useMergedPhaseView]);
 
   const isNFsimMode = useMemo(() => {
     if (typeof isNFsim === 'boolean') return isNFsim;
@@ -286,8 +390,8 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
   }, [results, availableSuffixes]);
 
   const { sourceData, sourceSpeciesData, selectedResults } = useMemo(
-    () => getSelectedSimulationSlice(results, selectedSuffix),
-    [results, selectedSuffix]
+    () => getSelectedSimulationSlice(results, selectedSuffix, model),
+    [results, selectedSuffix, model]
   );
 
   // Compute chart data with expression values
@@ -604,7 +708,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
   };
 
   return (
-    <Card className="max-w-full flex flex-col h-auto min-h-full">
+    <Card className="max-w-full flex flex-col h-auto">
       {/* Suffix Tabs (if multiple available) */}
       {availableSuffixes.length > 1 && (
         <div className="flex gap-2 p-2 px-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50/50 dark:bg-slate-900/10">
@@ -618,7 +722,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
                   : 'bg-transparent border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:text-slate-400 dark:hover:bg-slate-800/50'
               }`}
             >
-              {sfx === '__default__' ? 'Default Context' : sfx}
+              {sfx === '__default__' ? 'Default Output' : sfx}
             </button>
           ))}
         </div>
@@ -626,8 +730,8 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
 
       <div 
         ref={setWrapperRef}
-        className="h-[500px] w-full relative text-slate-700 dark:text-slate-300" 
-        style={{ width: '100%', height: 500, minHeight: 500 }}
+        className="h-[clamp(300px,42vh,520px)] w-full relative text-slate-700 dark:text-slate-300"
+        style={{ width: '100%' }}
       >
         {hasValidDimensions ? (
           <LineChart

@@ -378,7 +378,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
             <SimulationControls
               onRun={onSimulate}
               isSimulating={isSimulating}

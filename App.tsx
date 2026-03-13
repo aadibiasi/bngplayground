@@ -57,7 +57,7 @@ const findExampleById = (id?: string | null) => {
 
 function App() {
   const PANEL_MAX_HEIGHT = 'calc(100vh - 120px)';
-  const PANEL_MIN_HEIGHT = '800px';
+  const PANEL_MIN_HEIGHT = '0px';
   const MIN_SPLIT_POSITION = 18; // percentage
   const MAX_SPLIT_POSITION = 82; 
   const [code, setCode] = useState<string>(INITIAL_BNGL_CODE);

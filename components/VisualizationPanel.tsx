@@ -278,7 +278,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       {/* Content Panels */}
       <div className="flex-1 min-h-0 overflow-y-auto p-4">
         {activeTab === 0 && (
-          <div className="h-full flex flex-col">
+          <div className="flex flex-col">
             <HelpSection
               title="Time Courses"
               description="Visualize how your model's observables (species or groups of species) evolve over simulated time. This is the primary way to observe the dynamic behavior of your biological system."
@@ -290,7 +290,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="The chart shows concentration (or molecular count) on the Y-axis vs. simulated time on the X-axis. Higher peaks represent higher abundance of that molecule at that specific time."
             />
-            <div className="flex-1 min-h-0">
+            <div className="min-h-0">
               <ResultsChart
                 results={results}
                 model={model}
