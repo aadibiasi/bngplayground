@@ -43,7 +43,7 @@ export function formatZodError(toolName: string, args: ToolArgs, error: z.ZodErr
     return new Error(`Invalid arguments for ${toolName}: ${issues}. Received: ${received}`);
 }
 
-export function parseArgs<T>(toolName: string, schema: z.ZodType<T>, args: ToolArgs): T {
+export function parseArgs<T extends z.ZodTypeAny>(toolName: string, schema: T, args: ToolArgs): z.infer<T> {
     const parsed = schema.safeParse(args ?? {});
     if (!parsed.success) {
         throw formatZodError(toolName, args, parsed.error);

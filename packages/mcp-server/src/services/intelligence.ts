@@ -246,7 +246,7 @@ function setObservableLine(code: string, name: string, type: 'Molecules' | 'Spec
 }
 
 export function composeModelFromStatements(args: {
-    statements: string[];
+    statements?: string[];
     parameters?: Record<string, number>;
     seed_species?: ComposeSeedSpecies[];
     strict?: boolean;
@@ -257,6 +257,10 @@ export function composeModelFromStatements(args: {
     molecules: ComposeMolecule[];
     confirmation: string;
 } {
+    if (!args.statements || args.statements.length === 0) {
+        throw new Error('No statements were provided for model composition.');
+    }
+
     const documentText = args.statements.map((line) => normalizeWhitespace(line)).join('\n');
     const sentences = BioParser.parseDocument(documentText);
     const validSentences = sentences.filter((sentence) => sentence.isValid && sentence.type !== 'COMMENT');
@@ -636,7 +640,7 @@ function findShortestPath(
 }
 
 export async function diagnoseModelDeep(args: {
-    code: string;
+    code?: string;
     method?: 'ode' | 'ssa' | 'nf' | 'default';
     t_end?: number;
     n_steps?: number;
@@ -692,6 +696,10 @@ export async function diagnoseModelDeep(args: {
         selectedParameters: string[];
     };
 }> {
+    if (!args.code) {
+        throw new Error('No BNGL code provided for model diagnosis.');
+    }
+
     const model = parseModelOrThrow(args.code);
     const reactionRules = model.reactionRules ?? [];
     const validation = validateModel(model, false);
