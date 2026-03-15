@@ -13,9 +13,9 @@ export const ModelExplorerTab: React.FC<ModelExplorerTabProps> = ({ onLoadModel 
     };
 
     return (
-        <div className="h-full flex flex-col items-center justify-center px-4 pb-6">
-            <div className="w-full max-w-4xl rounded-2xl border border-slate-200 dark:border-slate-700 dark:border-slate-700 bg-gradient-to-br from-slate-900 to-slate-950 p-8 shadow-sm">
-                <div className="max-w-2xl mx-auto text-center space-y-6">
+        <div className="h-full min-h-0 flex flex-col px-2 md:px-4 pb-4">
+            <div className="w-full h-full min-h-[420px] rounded-2xl border border-slate-200 dark:border-slate-700 dark:border-slate-700 bg-gradient-to-br from-slate-900 to-slate-950 p-6 md:p-8 shadow-sm flex items-center justify-center">
+                <div className="w-full max-w-4xl mx-auto text-center space-y-6">
                 <div className="text-6xl mb-4">🌎</div>
                 <h2 className="text-3xl font-bold text-white">Model Explorer</h2>
                 <p className="text-lg text-slate-300">

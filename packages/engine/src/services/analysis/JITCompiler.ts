@@ -324,7 +324,7 @@ export class JITCompiler {
             // Build rate expression: k * product(y[reactant]^stoich)
             let rateExpr = typeof rxn.rateConstant === 'number'
                 ? rxn.rateConstant.toString()
-                : `(${ExpressionTranslator.translate(rxn.rateConstant.toString())})`; // Expression in parentheses for safety
+                : `(${ExpressionTranslator.translate(rxn.rateConstant.toString()).replace(/\bt\b/g, '__t__')})`; // Expression in parentheses for safety
 
             // NOTE: BNG2 network simulations (ODE) do not implement TotalRate; treat as standard mass action.
             for (let j = 0; j < rxn.reactantIndices.length; j++) {
@@ -441,7 +441,7 @@ export class JITCompiler {
         }
 
         // Create the function
-        const fullSource = `(function(params) {\nreturn function(t, y, dydt, speciesVolumes) {\n${source}}\n})`;
+        const fullSource = `(function(params) {\nreturn function(__t__, y, dydt, speciesVolumes) {\n${source}}\n})`;
 
         let evaluate: CompiledRHS;
         const parameterVector = this.buildParameterVector(parameterNames, parameters);
@@ -649,9 +649,11 @@ export class JITCompiler {
                     } else {
                         // Try to evaluate expression
                         const translated = ExpressionTranslator.translate(rxn.rateConstant.toString());
+                        // Avoid collisions with the time variable parameter by using a unique placeholder
+                        const translatedSafe = translated.replace(/\bt\b/g, '__t__');
                         // Simple evaluation for parameters
                         try {
-                            const evaluator = new Function('params', `const {${Object.keys(parameters || {}).join(',')}} = params; return ${translated};`);
+                            const evaluator = new Function('params', `const {${Object.keys(parameters || {}).join(',')}} = params; return ${translatedSafe};`);
                             k = evaluator(parameters || {});
                             if (isNaN(k) || !isFinite(k)) return null;
                         } catch {
@@ -886,6 +888,22 @@ export class JITCompiler {
                     new Float64Array(buf)[0] = node.value;
                     bytes.push(...new Uint8Array(buf));
                 } else if (node.type === 'Identifier') {
+                    // Support common global constants used in BNGL expressions
+                    if (node.name === 'NaN') {
+                        bytes.push(OP_PUSH_CONST);
+                        const buf = new ArrayBuffer(8);
+                        new Float64Array(buf)[0] = NaN;
+                        bytes.push(...new Uint8Array(buf));
+                        return;
+                    }
+                    if (node.name === 'Infinity') {
+                        bytes.push(OP_PUSH_CONST);
+                        const buf = new ArrayBuffer(8);
+                        new Float64Array(buf)[0] = Infinity;
+                        bytes.push(...new Uint8Array(buf));
+                        return;
+                    }
+
                     const speciesIdx = speciesIndexByName.get(node.name);
                     if (speciesIdx !== undefined) {
                         bytes.push(OP_PUSH_SPEC);

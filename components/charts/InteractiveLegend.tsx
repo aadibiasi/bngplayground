@@ -55,38 +55,55 @@ export const ExternalLegend: React.FC<{
   );
 };
 
+export interface LegendPayloadEntry {
+  value: string;
+  color: string;
+  type?: 'line' | 'scatter' | 'area';
+  inactive?: boolean;
+}
+
 export const InlineLegend: React.FC<{
-  payload?: Array<{ value: string; color: string; inactive?: boolean }>;
+  payload?: LegendPayloadEntry[];
   onToggle: (name: string) => void;
   onIsolate: (name: string) => void;
 }> = ({ payload, onToggle, onIsolate }) => {
   if (!payload || payload.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-2 mt-4 px-4">
-      {payload.map((entry, index) => (
-        <div
-          key={`item-${index}`}
-          onClick={() => onToggle(entry.value)}
-          onDoubleClick={(e) => {
-            e.preventDefault();
-            onIsolate(entry.value);
-          }}
-          title="Double-click to isolate"
-          className={`flex items-center cursor-pointer transition-opacity ${entry.inactive ? 'opacity-50' : 'opacity-100'} hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-1 -ml-1`}
-        >
+    <div className="flex flex-wrap justify-center items-center gap-x-2 gap-y-1.5 px-4">
+      {payload.map((entry, index) => {
+        const isScatter = entry.type === 'scatter';
+        return (
           <div
-            style={{
-              width: 12,
-              height: 12,
-              backgroundColor: entry.color,
-              marginRight: 6,
-              borderRadius: '2px',
+            key={`item-${index}`}
+            onClick={() => onToggle(entry.value)}
+            onDoubleClick={(e) => {
+              e.preventDefault();
+              onIsolate(entry.value);
             }}
-          />
-          <span className="text-xs text-slate-700 dark:text-slate-300">{entry.value}</span>
-        </div>
-      ))}
+            title="Click to toggle, double-click to isolate"
+            className={`flex items-center gap-2 cursor-pointer transition-all duration-200 
+              ${entry.inactive ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'} 
+              hover:bg-slate-100 dark:hover:bg-slate-800/80 rounded-md px-2 py-1
+              border border-transparent hover:border-slate-200 dark:hover:border-slate-700
+              select-none active:scale-95`}
+          >
+            <div
+              className={`shrink-0 transition-transform ${entry.inactive ? 'scale-75' : 'scale-100'}`}
+              style={{
+                width: 10,
+                height: 10,
+                backgroundColor: entry.color,
+                borderRadius: isScatter ? '50%' : '2px',
+                boxShadow: entry.inactive ? 'none' : `0 0 0 1px ${entry.color}44`,
+              }}
+            />
+            <span className={`text-[11px] font-medium transition-colors ${entry.inactive ? 'text-slate-400 dark:text-slate-600' : 'text-slate-700 dark:text-slate-300'}`}>
+              {entry.value}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 };

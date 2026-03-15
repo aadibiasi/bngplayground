@@ -702,7 +702,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                       domain={['auto', 'auto']}
                       tickFormatter={(v) => formatValue(v)}
                       tick={{ fontSize: 10 }}
-                      label={{ value: 'Parameter Value (log scale)', position: 'bottom', offset: 0, fontSize: 11, fontWeight: 'bold' }}
+                      label={{ value: 'Parameter Value (log scale)', position: 'bottom', offset: 15, fontSize: 11, fontWeight: 'bold' }}
                     />
                     <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 10, fontWeight: 'bold' }} />
                     <Tooltip 
@@ -782,7 +782,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                 <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
                   Time-Course Fit Comparison
                 </h3>
-                <div className="h-[350px] w-full">
+                <div className="h-[480px] w-full mb-2">
                   <TimeSeriesChart
                     data={fitComparisonData}
                     series={fitComparisonSeries}
@@ -812,18 +812,18 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                 <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
                   Optimization Path (Residual Convergence)
                 </h3>
-                <div className="h-[260px] w-full text-slate-700 dark:text-slate-300">
+                <div className="h-[480px] w-full mb-2 text-slate-700 dark:text-slate-300">
                   <ResponsiveContainer>
                     <LineChart
                       data={elboChartData.map(d => ({ ...d, logElbo: d.elbo > 0 ? Math.log10(d.elbo) : null }))}
-                      margin={{ top: 10, right: 20, left: 65, bottom: 36 }}
+                      margin={{ top: 10, right: 20, left: 10, bottom: 36 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.15} vertical={false} />
                       <XAxis
                         dataKey="iteration"
                         type="number"
                         domain={[0, 'dataMax']}
-                        label={{ value: 'Iteration', position: 'bottom', offset: 12, fill: 'currentColor', fontSize: 13, fontWeight: 'bold' }}
+                        label={{ value: 'Iteration', position: 'bottom', offset: 15, fill: 'currentColor', fontSize: 13, fontWeight: 'bold' }}
                         tickCount={6}
                         tickMargin={6}
                         tick={{ fontSize: 11, fill: 'currentColor' }}
@@ -832,7 +832,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                       />
                       <YAxis
                         dataKey="logElbo"
-                        label={{ value: 'log₁₀(SSE)', angle: -90, position: 'insideLeft', fill: 'currentColor', fontSize: 13, fontWeight: 'bold', offset: 20, style: { textAnchor: 'middle' } }}
+                        label={{ value: 'log₁₀(SSE)', angle: -90, position: 'insideLeft', fill: 'currentColor', fontSize: 13, fontWeight: 'bold', offset: -10, style: { textAnchor: 'middle' } }}
                         tickCount={5}
                         tick={{ fontSize: 11, fill: 'currentColor' }}
                         tickLine={{ stroke: 'currentColor', strokeOpacity: 0.5 }}

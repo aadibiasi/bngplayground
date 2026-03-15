@@ -82,4 +82,10 @@ describe('SafeExpressionEvaluator (AST allowlist)', () => {
     const fn = compile('FunctionProduct(k1, k2)', ['k1', 'k2']);
     expect(fn({ k1: 2, k2: 3 })).toBe(6);
   });
+
+  it('supports &&/|| logical operators (e.g. t>=sigma&&t<sigma+t_delta2)', () => {
+    const fn = compile('t>=sigma&&t<sigma+t_delta2', ['t', 'sigma', 't_delta2']);
+    expect(fn({ t: 1, sigma: 0, t_delta2: 2 })).toBe(1);
+    expect(fn({ t: 3, sigma: 0, t_delta2: 2 })).toBe(0);
+  });
 });

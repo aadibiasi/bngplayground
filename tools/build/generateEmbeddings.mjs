@@ -9,10 +9,13 @@
  * The model is cached in the transformers.js cache directory.
  */
 
-import { pipeline } from '@xenova/transformers';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { pipeline } from '@xenova/transformers';
+
+// Import canonical categories from constants.ts for consistent tagging
+import { MODEL_CATEGORIES } from '../../constants.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../');
@@ -237,12 +240,35 @@ async function scanModels() {
 }
 
 /**
+ * Map model IDs to their canonical category names from constants.ts
+ */
+function getCanonicalCategoryMap() {
+  const map = new Map();
+  for (const cat of MODEL_CATEGORIES) {
+    for (const model of cat.models) {
+      if (!map.has(model.id)) {
+        map.set(model.id, [cat.name]);
+      } else {
+        // Handle models in multiple categories
+        const tags = map.get(model.id);
+        if (!tags.includes(cat.name)) {
+          tags.push(cat.name);
+        }
+      }
+    }
+  }
+  return map;
+}
+
+/**
  * Generate embeddings for all models.
  */
 async function generateEmbeddings() {
   console.log('Scanning for BNGL models...');
   const models = await scanModels();
   console.log(`Found ${models.length} models.`);
+
+  const canonicalMap = getCanonicalCategoryMap();
 
   // Support DRY_RUN for testing the filter without running the heavy embedding step
   if (process.env.DRY_RUN) {
@@ -264,14 +290,16 @@ async function generateEmbeddings() {
       const output = await embed(model.searchText, { pooling: 'mean', normalize: true });
       const embedding = Array.from(output.data);
 
+      // Use canonical tags from constants.ts if available, otherwise fallback to manifest tags
+      const canonicalTags = canonicalMap.get(model.id) || model.tags || [];
+
       results.push({
         id: model.id,
         filename: model.filename,
         path: model.path,
-        // Preserve tags (derived from folder structure) so the UMAP page can color by category
-        tags: model.tags || [],
-        // Backwards-compatible category field (first tag) kept for older consumers
-        category: (model.tags && model.tags[0]) || model.category || null,
+        // Preserve tags/categories for UMAP visualization
+        tags: canonicalTags,
+        category: canonicalTags[0] || 'Example Models',
         embedding: embedding,
         observables: model.observables || [],
         // Store truncated search text for display (first 200 chars)

@@ -276,9 +276,9 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
 
       {/* Content Panels */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4">
+      <div className="flex-1 min-h-0 flex flex-col p-4 overflow-hidden">
         {activeTab === 0 && (
-          <div className="flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Time Courses"
               description="Visualize how your model's observables (species or groups of species) evolve over simulated time. This is the primary way to observe the dynamic behavior of your biological system."
@@ -315,7 +315,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 1 && networkViewMode === 'regulatory' && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col">
             <HelpSection
               title="Regulatory Graph"
               description="A rule-level view of how reactions influence each other. This is different from a standard species-interaction network; it shows which rules enable (activate) or disable (inhibit) other rules."
@@ -337,7 +337,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 1 && networkViewMode === 'contact' && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col">
             <HelpSection
               title="Contact Map"
               description="The Contact Map provides a global view of the physical structure of your model. It shows every molecule type and all possible bonds between their components."
@@ -354,7 +354,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 1 && networkViewMode === 'rules' && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Rules Inspector"
               description="Follow specific site-level changes (atoms) through the simulation. This tool identifies exactly which bonds or states are modified by each rule and tracks their abundance over time."
@@ -377,7 +377,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 1 && networkViewMode === 'influence' && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col">
             <HelpSection
               title="Structural Influence Graph"
               description="Shows rule-to-rule causal relationships. An edge from rule A to rule B means A's structural changes can affect B's ability to fire."
@@ -396,7 +396,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 2 && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Parameter Scan"
               description="Parameter scanning allows you to run multiple simulations automatically while varying a specific value. This is used to create dose-response curves and sensitivity maps."
@@ -415,7 +415,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 3 && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Steady State"
               description="Find the long-term equilibrium where concentrations no longer change over time. This is useful for metabolic modeling and signaling homeostasis."
@@ -438,7 +438,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 4 && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Local Sensitivity"
               description="Perform local sensitivity analysis using the Fisher Information Matrix (FIM). Determine if your parameters can be uniquely identified from your data."
@@ -457,7 +457,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 5 && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Parameter Estimation"
               description="Infer the parameter distributions that best explain your experimental data. This tool uses Variational Inference (VI) to estimate both the optimal value and the statistical uncertainty (Bayesian posterior) for each parameter."
@@ -476,7 +476,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 6 && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Flux Analysis"
               description="Quantify the dynamic flow of material through each reaction. Identify which reactions are the main 'drivers' of the system at any given time point."
@@ -495,7 +495,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 7 && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Verification"
               description="Verify model behavior by defining mathematical constraints. Ensure your system respects biological limits and physical laws like mass conservation throughout the simulation."
@@ -514,7 +514,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 8 && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="What-If Compare"
               description="What-If comparison allows you to see the impact of any change side-by-side. Compare different genotypes, drug treatments, or initial concentrations in one view."
@@ -533,7 +533,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 9 && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Rule Cartoons"
               description="Visualize chemical reaction rules using standardized biological symbols. This view simplifies complex rules into intuitive 'cartoons' showing molecule binding, state changes, and transformations."
@@ -550,7 +550,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 10 && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <HelpSection
               title="Model Explorer"
               description="Browse nearly 200 published biological models. Use them as templates for your own research or as educational examples."
@@ -562,15 +562,17 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="The similarity map (UMAP) organizes models by their biological motifs. Clusters of models often share similar signaling mechanisms or reaction structures."
             />
-            <ModelExplorerTab onLoadModel={(code, name, id) => {
+            <div className="flex-1 min-h-0">
+              <ModelExplorerTab onLoadModel={(code, name, id) => {
               console.log("Model Explorer: request to load model", { name, id });
               // TODO: Implement model loading via custom event or prop callback
-            }} />
+              }} />
+            </div>
           </div>
         )}
 
         {activeTab === 11 && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Trajectory Explorer"
               description="In stochastic systems (SSA), every run is slightly different. The Trajectory Explorer allows you to inspect multiple individual runs to understand biological noise and variance."
@@ -587,7 +589,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 12 && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Jupyter Export"
               description="Transition from the web UI to professional data science. Export your entire session as a Python-based Jupyter Notebook for reproducibility and custom analysis."
@@ -604,7 +606,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 1 && networkViewMode === 'analysis' && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Network Analysis"
               description="Apply graph-theory algorithms to your reaction network. Compute centrality metrics (betweenness, PageRank, closeness), detect communities, and measure network connectivity."
@@ -635,7 +637,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 14 && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Global Sensitivity (Sobol)"
               description="Quantify how much each parameter contributes to the variance of your model outputs across its entire range. Sobol indices provide a robust way to identify the most (and least) influential parameters, accounting for non-linear interactions."
@@ -654,7 +656,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 15 && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <HelpSection
               title="Profile Likelihood"
               description="Evaluate the identifiability of your parameters. By 'stepping' through each parameter and re-optimizing the others, this analysis determines if a parameter is well-determined by your experimental data or if it's structurally/practically unidentifiable."
@@ -666,14 +668,14 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="A sharp parabolic bowl indicates a well-identified parameter. A flat or shallow curve indicates unidentifiability, where multiple parameter combinations explain the data equally well."
             />
-            <div className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 overflow-hidden">
               <ProfileLikelihoodTab model={model} />
             </div>
           </div>
         )}
 
         {activeTab === 16 && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="ABC-SMC (Bayesian Inference)"
               description="Approximate Bayesian Computation with Sequential Monte Carlo allows you to infer parameter distributions even without a defined likelihood function. It iteratively refines a population of particles (parameter sets) to match your experimental data."

@@ -158,6 +158,11 @@ function validateExprBasics(expr: string): void {
   }
 }
 
+/**
+ * Replace C-style logical operators with word operators to ensure consistent parsing.
+ * This helps keep expression parsing behavior stable across environments.
+ */
+
 // Basic interface for jsep AST nodes to avoid 'any' abuse
 interface JsepNode {
   type: string;
@@ -263,6 +268,9 @@ function evaluateNode(node: JsepNode, context: Record<string, number>, stepRef: 
         case '<=': return left <= right ? 1 : 0;
         case '>': return left > right ? 1 : 0;
         case '>=': return left >= right ? 1 : 0;
+        // Some versions of jsep parse &&/|| as BinaryExpression rather than LogicalExpression
+        case '&&': return left !== 0 ? (right !== 0 ? 1 : 0) : 0;
+        case '||': return left !== 0 ? 1 : (right !== 0 ? 1 : 0);
         default: throw new Error(`Unsupported binary operator: ${node.operator}`);
       }
     }
@@ -356,6 +364,7 @@ export function compile(
 
   // 1. Input Sanitization: Reject suspicious patterns (pre-check)
   // Rejects repeated operators like +++ or ... or /// which might cause parser issues
+  // Allow valid double-operator tokens (&&, ||, ==), but reject sequences like &&& or |||.
   if (/([+\-*/%^!&|=<>])\1{2,}/.test(expr)) {
     throw new Error('Suspicious pattern detected: Repeated operators');
   }

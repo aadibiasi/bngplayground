@@ -155,7 +155,7 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
   return (
     <div className="flex flex-col xl:flex-row gap-6 h-full min-h-0 overflow-hidden">
       {/* Sidebar: Configuration */}
-      <div className="w-full xl:w-80 flex-shrink-0 flex flex-col gap-6 overflow-y-auto pr-2 min-h-0">
+      <div className="w-full xl:w-80 xl:max-w-80 flex-shrink-0 flex flex-col gap-6 overflow-y-auto pr-2 min-h-0">
         <Card className="p-5 border-t-4 border-t-teal-500 shadow-sm">
           <h3 className="font-bold text-slate-800 dark:text-slate-100 mb-4 text-xs uppercase tracking-widest">Profiling Settings</h3>
           
@@ -257,8 +257,9 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col gap-6 overflow-y-auto min-h-0 pb-8 pr-2">
-        <div className={`grid grid-cols-1 ${results || isAnalyzing ? '' : 'xl:grid-cols-2'} gap-6 flex-1 min-h-0 max-h-full`}>
+      <div className="flex-1 flex flex-col gap-3 overflow-y-auto min-h-0 pb-2 pr-2">
+        {(!results || isAnalyzing) && (
+        <div className={`grid grid-cols-1 ${results || isAnalyzing ? '' : 'xl:grid-cols-2'} gap-4 shrink-0`}>
           <Card className="p-4 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
@@ -367,12 +368,13 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
              </Card>
           )}
         </div>
+        )}
 
         {/* Results Summary & Dynamic Profile Charts */}
         {results && (
-          <div className="flex flex-col gap-6 pb-6 shrink-0">
+          <div className="flex flex-col gap-3 pb-1">
             {/* Horizontal Summary Strip */}
-            <Card className="p-4 bg-teal-50/20 border-l-4 border-l-teal-600 shadow-md flex items-center justify-between animate-in slide-in-from-top-4 duration-500">
+            <Card className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
                <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center text-xl shadow-inner">✅</div>
                   <div>
@@ -381,14 +383,14 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
                   </div>
                </div>
                
-               <div className="flex gap-4">
-                  <div className="px-4 py-2 bg-white dark:bg-slate-900 dark:bg-slate-800/80 rounded-lg border border-teal-100 dark:border-slate-700 shadow-sm text-center min-w-[100px]">
+              <div className="flex gap-3">
+                <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700 text-center min-w-[96px]">
                      <div className="text-[9px] font-bold text-slate-400 uppercase">Identifiable</div>
                      <div className="text-xl font-black text-teal-600">
                         {Object.values(results.profiles).filter(p => p.identifiability === 'identifiable').length}
                      </div>
                   </div>
-                  <div className="px-4 py-2 bg-white dark:bg-slate-900 dark:bg-slate-800/80 rounded-lg border border-teal-100 dark:border-slate-700 shadow-sm text-center min-w-[100px]">
+                <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700 text-center min-w-[96px]">
                      <div className="text-[9px] font-bold text-slate-400 uppercase">Unidentifiable</div>
                      <div className="text-xl font-black text-rose-500">
                         {Object.values(results.profiles).filter(p => p.identifiability !== 'identifiable').length}
@@ -397,7 +399,7 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
                </div>
             </Card>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {Object.entries(results.profiles).map(([name, profile]) => {
               const chartData = profile.grid.map((val, i) => ({
                 val,
@@ -407,7 +409,7 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
               const isIdentifiable = profile.identifiability === 'identifiable';
 
               return (
-                <Card key={name} className="p-6 flex flex-col gap-4 overflow-hidden shadow-lg border-t-2 border-t-teal-500">
+                <Card key={name} className="p-3 flex flex-col gap-2 overflow-hidden border border-slate-200 dark:border-slate-700">
                   <div className="flex justify-between items-start">
                     <div>
                       <h4 className="font-black text-slate-900 dark:text-white flex items-center gap-3">
@@ -429,22 +431,9 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
                     </div>
                   </div>
 
-                  <div className="h-[300px] w-full mt-4 bg-slate-50 dark:bg-slate-900/50/50 dark:bg-slate-900/30 rounded-xl p-2 border border-slate-100 dark:border-slate-800">
+                  <div className="h-[clamp(200px,26vh,280px)] w-full mt-1 bg-white dark:bg-slate-900 rounded-lg p-2 border border-slate-200 dark:border-slate-700">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={chartData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
-                        <defs>
-                           <filter id="shadow" height="130%">
-                             <feGaussianBlur in="SourceAlpha" stdDeviation="3" />
-                             <feOffset dx="2" dy="2" result="offsetblur" />
-                             <feComponentTransfer>
-                               <feFuncA type="linear" slope="0.3" />
-                             </feComponentTransfer>
-                             <feMerge>
-                               <feMergeNode />
-                               <feMergeNode in="SourceGraphic" />
-                             </feMerge>
-                           </filter>
-                        </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                         <XAxis 
                           dataKey="val" 
@@ -462,7 +451,7 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
                           label={{ value: 'Loss (SSR)', angle: -90, position: 'insideLeft', fontSize: 10, fill: '#94a3b8', fontWeight: 'bold' }}
                         />
                         <Tooltip 
-                          contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '11px' }}
+                          contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#334155', fontSize: '11px' }}
                           labelFormatter={(label: number) => `value: ${formatValue(label)}`}
                           formatter={(v: number) => [formatValue(v), 'SSR']}
                         />
@@ -481,11 +470,10 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
                           type="monotone" 
                           dataKey="ssr" 
                           stroke="#21808D" 
-                          strokeWidth={4} 
-                          dot={{ r: 5, fill: '#21808D', stroke: '#fff', strokeWidth: 2 }}
-                          activeDot={{ r: 8, strokeWidth: 0 }}
-                          animationDuration={2000}
-                          filter="url(#shadow)"
+                          strokeWidth={3} 
+                          dot={{ r: 4, fill: '#21808D', stroke: '#fff', strokeWidth: 1.5 }}
+                          activeDot={{ r: 6, strokeWidth: 0 }}
+                          animationDuration={900}
                         />
                       </LineChart>
                     </ResponsiveContainer>
@@ -498,33 +486,31 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
       )}
 
         {results && (
-          <div className="p-6 bg-slate-900 rounded-2xl border-2 border-slate-800 shadow-2xl overflow-hidden relative mb-6 shrink-0">
-            <div className="absolute -top-10 -right-10 w-40 h-40 bg-teal-500/10 rounded-full blur-3xl" />
-            <h4 className="font-black text-white mb-4 uppercase tracking-tighter text-sm flex items-center gap-2">
-               <span className="w-2 h-2 rounded-full bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.5)]" />
-               Likelihood Profile Guide
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-               <div className="space-y-2">
-                  <div className="text-teal-400 text-xs font-black uppercase tracking-widest">Identifiable</div>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                     The loss increases sharply as the parameter moves away from the optimum, crossing the threshold to define a tight confidence interval.
-                  </p>
-               </div>
-               <div className="space-y-2">
-                  <div className="text-amber-400 text-xs font-black uppercase tracking-widest">Practically</div>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                     The curve is shallow; it fails to cross the threshold within the scanned range. Requires more experimental data points or reduced measurement noise.
-                  </p>
-               </div>
-               <div className="space-y-2">
-                  <div className="text-rose-400 text-xs font-black uppercase tracking-widest">Structurally</div>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                     The curve is perfectly flat. This parameter is redundant in the model's current structure; it cannot be uniquely determined regardless of data quality.
-                  </p>
-               </div>
+          <details className="shrink-0 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 mt-1">
+            <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              Likelihood Profile Guide
+            </summary>
+            <div className="px-4 pt-3 pb-4 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-100 dark:border-slate-800">
+              <div className="space-y-1">
+                <div className="text-teal-600 text-xs font-bold uppercase tracking-wide">Identifiable</div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  The loss increases sharply as the parameter moves away from the optimum, crossing the threshold to define a tight confidence interval.
+                </p>
+              </div>
+              <div className="space-y-1">
+                <div className="text-amber-600 text-xs font-bold uppercase tracking-wide">Practically</div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  The curve is shallow; it fails to cross the threshold within the scanned range. Requires more experimental data points or reduced measurement noise.
+                </p>
+              </div>
+              <div className="space-y-1">
+                <div className="text-rose-600 text-xs font-bold uppercase tracking-wide">Structurally</div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  The curve is perfectly flat. This parameter is redundant in the model's current structure; it cannot be uniquely determined regardless of data quality.
+                </p>
+              </div>
             </div>
-          </div>
+          </details>
         )}
       </div>
     </div>

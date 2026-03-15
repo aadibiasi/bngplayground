@@ -62,7 +62,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
   yAxisLabel = 'Concentration',
   xAxisKey = 'time',
   height = '100%',
-  margin = { top: 20, right: 30, left: 30, bottom: 90 }, // Increased bottom margin for legend
+  margin = { top: 20, right: 30, left: 30, bottom: 85 }, // Optimized bottom margin for legend
   syncId,
   showGrid = true,
   animationDuration = 300,
@@ -149,13 +149,25 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
   const displayXLabel = xAxisScale === 'log' ? `log(${xAxisLabel})` : xAxisLabel;
   const displayYLabel = yAxisScale === 'log' ? `log(${yAxisLabel})` : yAxisLabel;
 
+  // Manual legend payload to keep it outside the SVG coordinate space (avoids squishing)
+  const legendPayload = useMemo(() => series.map(s => ({
+    value: s.name,
+    color: s.color,
+    type: s.type,
+    inactive: visibleSeries ? !visibleSeries.has(s.name) : false
+  })), [series, visibleSeries]);
+
   return (
-    <div className="flex flex-col w-full h-full">
-      <div className="flex-1 min-h-0 relative">
+    <div 
+      className="flex flex-col w-full overflow-hidden" 
+      style={{ height: height || '100%' }}
+    >
+      {/* Main Chart Area */}
+      <div className="flex-1 min-h-[160px] relative">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart 
             data={plotData} 
-            margin={margin} 
+            margin={{ ...margin, bottom: 25 }} // Axis labels need some space but not legend anymore
             syncId={syncId}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
@@ -169,15 +181,15 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
               tickFormatter={(v) => formatValue(xAxisScale === 'log' ? Math.pow(10, Number(v)) : Number(v))}
               axisLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
               tickLine={{ stroke: '#94a3b8' }}
-              tick={{ fill: '#475569', fontSize: 12 }}
+              tick={{ fill: '#475569', fontSize: 11 }}
               domain={currentDomain ? [currentDomain.x1, currentDomain.x2] : ['auto', 'auto']}
               allowDataOverflow={true}
               label={{
                 value: displayXLabel,
                 position: 'insideBottom',
-                offset: -15,
-                fill: '#1e293b',
-                fontSize: 13,
+                offset: -12,
+                fill: '#64748b',
+                fontSize: 12,
                 fontWeight: 600
               }}
             />
@@ -186,16 +198,16 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
               tickFormatter={(v) => formatValue(yAxisScale === 'log' ? Math.pow(10, Number(v)) : Number(v))}
               axisLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
               tickLine={{ stroke: '#94a3b8' }}
-              tick={{ fill: '#475569', fontSize: 12 }}
+              tick={{ fill: '#475569', fontSize: 11 }}
               domain={currentDomain ? [currentDomain.y1, currentDomain.y2] : [0, 'auto']}
               allowDataOverflow={true}
               label={{
                 value: displayYLabel,
                 angle: -90,
                 position: 'insideLeft',
-                offset: -15,
-                fill: '#1e293b',
-                fontSize: 13,
+                offset: -10,
+                fill: '#64748b',
+                fontSize: 12,
                 fontWeight: 600,
                 style: { textAnchor: 'middle' }
               }}
@@ -203,18 +215,6 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
             <RechartsTooltip
               content={<CustomTooltip xAxisLabel={xAxisLabel} xAxisScale={xAxisScale} yAxisScale={yAxisScale} />}
               cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '5 5' }}
-            />
-            <Legend
-              verticalAlign="bottom"
-              align="center"
-              wrapperStyle={{ paddingTop: '40px' }} // Pushed lower
-              content={(props) => (
-                <InlineLegend
-                  payload={props.payload as any}
-                  onToggle={handleLegendClick}
-                  onIsolate={handleLegendDoubleClick}
-                />
-              )}
             />
             {series.map((s, i) => {
               const isVisible = visibleSeries ? visibleSeries.has(s.name) : true;
@@ -261,9 +261,18 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
         </ResponsiveContainer>
       </div>
 
+      {/* External Legend - outside SVG avoids interaction bugs and plot squishing */}
+      <div className="py-4 px-2 border-t border-slate-50 dark:border-slate-800/20">
+        <InlineLegend
+          payload={legendPayload}
+          onToggle={handleLegendClick}
+          onIsolate={handleLegendDoubleClick}
+        />
+      </div>
+
       {allowScale && (
-        <div className="flex items-center gap-2 mt-2 px-4 pb-2 border-t border-slate-100 dark:border-slate-800 pt-2 shrink-0">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-2">Scale</span>
+        <div className="flex items-center gap-2 px-4 pb-2 shrink-0 opacity-80 hover:opacity-100 transition-opacity">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mr-2">Scale</span>
           <button
             onClick={() => { setXAxisScale(s => s === 'linear' ? 'log' : 'linear'); setZoomHistory([]); }}
             className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors ${xAxisScale === 'log' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}
@@ -276,12 +285,15 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
           >
             Y: {yAxisScale.toUpperCase()}
           </button>
+          <div className="ml-auto text-[10px] text-slate-400 font-medium italic hidden sm:block">
+            Drag to zoom • Double-click to reset
+          </div>
           {zoomHistory.length > 0 && (
             <button
               onClick={() => setZoomHistory([])}
-              className="ml-auto px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+              className="ml-2 px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 underline underline-offset-2"
             >
-              Reset Zoom
+              Reset View
             </button>
           )}
         </div>

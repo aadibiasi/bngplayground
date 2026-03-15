@@ -1008,13 +1008,14 @@ function App() {
             {status && <StatusMessage status={status} onClose={handleStatusClose} />}
           </div>
 
-          <div className="flex flex-1 min-h-0 min-w-0 flex-col lg:flex-row gap-0 items-stretch">
+          <div className="flex flex-1 min-h-0 min-w-0 flex-col lg:flex-row gap-0 items-stretch" style={{ height: PANEL_MAX_HEIGHT }}>
             {/* Left Panel: Editor */}
             <div 
               className={`flex min-h-0 min-w-0 flex-col overflow-hidden transition-[flex] duration-200 ${splitPosition <= 5 ? 'flex-none w-14' : ''}`} 
               style={{ 
+                height: PANEL_MAX_HEIGHT,
+                minHeight: PANEL_MAX_HEIGHT,
                 maxHeight: PANEL_MAX_HEIGHT,
-                minHeight: PANEL_MIN_HEIGHT,
                 flex: splitPosition <= 5 ? 'none' : `1 1 ${splitPosition}%`,
                 width: splitPosition <= 5 ? '56px' : '100%',
                 maxWidth: '100%'
@@ -1083,8 +1084,9 @@ function App() {
             <div 
               className="flex min-w-0 flex-col min-h-0"
               style={{ 
+                height: PANEL_MAX_HEIGHT,
+                minHeight: PANEL_MAX_HEIGHT,
                 maxHeight: PANEL_MAX_HEIGHT,
-                minHeight: PANEL_MIN_HEIGHT,
                 flex: `1 1 ${100 - splitPosition}%`,
                 minWidth: '320px',
                 width: '100%', // Mobile default

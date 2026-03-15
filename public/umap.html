@@ -136,18 +136,65 @@
 
         async function init() {
             document.getElementById('status').textContent = 'Loading models...';
-            const resp = await fetch('./model-embeddings.json');
-            const json = await resp.json();
+            
+            // Fetch embeddings and RuleHub manifest in parallel
+            // This ensures we always use the latest canonical categories from RuleHub (the "Source of Truth")
+            const manifestUrl = 'https://raw.githubusercontent.com/akutuva21/rulehub/master/manifest.json';
+            
+            let json, manifestMap = new Map();
+            try {
+                const [resp, mresp] = await Promise.all([
+                    fetch('./model-embeddings.json'),
+                    fetch(manifestUrl).catch(() => null)
+                ]);
+                
+                json = await resp.json();
+                
+                if (mresp && mresp.ok) {
+                    const manifest = await mresp.json();
+                    manifest.forEach(m => manifestMap.set(m.id, m));
+                }
+            } catch (err) {
+                console.error('Failed to load model data:', err);
+                document.getElementById('status').textContent = 'Error loading models.';
+                return;
+            }
             
             const hasPrecomputed = json.hasUMAP || (json.models && json.models[0]?.umap2D);
             
-            models = Object.values(json.models || json).map(m => ({
-                ...m, 
-                displayName: getDisplayName(m),
-                pos2D: m.umap2D || [Math.random() * 10, Math.random() * 10],
-                pos3D: m.umap3D || [Math.random() * 10, Math.random() * 10, Math.random() * 10],
-                tags: m.tags || [m.category || 'Other']
-            }));
+            models = Object.values(json.models || json).map(m => {
+                const entry = manifestMap.get(m.id);
+                // Source of truth for category: RuleHub manifest > Embedded data > Fallback
+                let category = entry?.category || m.category || (m.tags && m.tags[0]) || 'Other';
+                
+                // Prettify RuleHub categories if they match common patterns
+                const categoryPuts = {
+                    'tutorial': 'Tutorials',
+                    'signaling': 'Signaling',
+                    'metabolism': 'Metabolism',
+                    'epidemiology': 'Epidemiology',
+                    'validation': 'Validation',
+                    'synthetic': 'Synthetic Biology'
+                };
+                if (categoryPuts[category.toLowerCase()]) category = categoryPuts[category.toLowerCase()];
+                else if (category.length > 0) {
+                    // Capitalize first letter if it's a simple string
+                    category = category.charAt(0).toUpperCase() + category.slice(1);
+                }
+
+                // Ensure category is the FIRST tag for consistent coloring
+                let tags = entry?.tags || m.tags || [category];
+                tags = [category, ...tags.filter(t => t !== category)];
+                
+                return {
+                    ...m, 
+                    displayName: entry?.name || getDisplayName(m),
+                    pos2D: m.umap2D || [Math.random() * 10, Math.random() * 10],
+                    pos3D: m.umap3D || [Math.random() * 10, Math.random() * 10, Math.random() * 10],
+                    tags: tags,
+                    category: category
+                };
+            });
 
             // Optionally restrict to verified/visible models
             try {

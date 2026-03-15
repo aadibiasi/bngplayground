@@ -175,10 +175,23 @@ function getEvaluator(override?: ExpressionEvaluator): ExpressionEvaluator | nul
   if (override) return override;
   if (SafeExpressionEvaluatorRef) return SafeExpressionEvaluatorRef;
 
-  // Fallback for Node environment
+  // Fallback for Node environment (used in tests / NodeJS runtime).
+  // We attempt an absolute path resolution to avoid relative require issues
+  // when code is executed from different directories or packaged outputs.
   if (typeof (globalThis as any).require === 'function') {
     try {
-      const mod = (globalThis as any).require('../../utils/safeExpressionEvaluator');
+      let modulePath = '../../utils/safeExpressionEvaluator';
+      try {
+        // Prefer a file:// URL based resolution if available (Node ESM contexts)
+        // NOTE: This will throw if import.meta is undefined (e.g., CJS).
+        const { fileURLToPath } = (globalThis as any).require('url');
+        const resolved = new URL('../../utils/safeExpressionEvaluator', import.meta.url);
+        modulePath = fileURLToPath(resolved);
+      } catch {
+        // Ignore and fall back to relative path
+      }
+
+      const mod = (globalThis as any).require(modulePath);
 
       // Handle both ES module default export and CommonJS
       const SafeEvaluator = mod.SafeExpressionEvaluator || mod.default?.SafeExpressionEvaluator || mod;
