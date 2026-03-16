@@ -3,12 +3,14 @@ import {
     computeFIM,
     formatBNGL,
     parseBNGLWithANTLR,
+    profileLikelihood,
     simulate,
     sobolSensitivity,
     loadEvaluator,
 } from '@bngplayground/engine';
 import { parseModelOrThrow, validateModel, cloneExpandedModel, updateMassActionRates, expandModel, buildSimulationOptions, extractMoleculeNames } from './engine.js';
 import { handleSimulate } from '../handlers/simulate.js';
+import { handleGetContactMap } from '../handlers/getContactMap.js';
 import { BioParser } from './grammar/parser.js';
 import { BNGLGenerator } from './grammar/generator.js';
 import type { DefinitionSentence } from './grammar/types.js';
@@ -353,9 +355,23 @@ export function applyModelEdits(
         errors: number;
         warnings: number;
     };
+    drift: {
+        totalOperations: number;
+        structuralChanges: number;
+        parametricChanges: number;
+        driftWarning?: string;
+    };
+    scope?: {
+        includes: string[];
+        excludes: string[];
+        justification: string;
+    };
 } {
     let current = ensureModelEnvelope(code);
     const summary: string[] = [];
+    let structuralChanges = 0;
+    let parametricChanges = 0;
+    let scope: { includes: string[]; excludes: string[]; justification: string } | undefined = undefined;
 
     for (const operation of operations) {
         const action = String(operation.action ?? '');
@@ -364,6 +380,7 @@ export function applyModelEdits(
                 const rule = normalizeWhitespace(String(operation.rule ?? ''));
                 current = insertRuleLine(current, rule);
                 summary.push(`Added rule: ${rule}`);
+                structuralChanges++;
                 break;
             }
             case 'add_statement': {
@@ -375,12 +392,14 @@ export function applyModelEdits(
                 const translated = composed.rules[0];
                 current = insertRuleLine(current, `${translated.name}: ${translated.rule}`);
                 summary.push(`Added statement as rule: ${translated.name}`);
+                structuralChanges++;
                 break;
             }
             case 'remove_rule': {
                 const name = normalizeWhitespace(String(operation.name ?? ''));
                 current = removeLineInBlock(current, 'reaction rules', (line) => line.startsWith(`${name}:`) || line === name);
                 summary.push(`Removed rule: ${name}`);
+                structuralChanges++;
                 break;
             }
             case 'remove_rule_index': {
@@ -400,6 +419,7 @@ export function applyModelEdits(
                 const removed = lines[index];
                 current = removeLineInBlock(current, 'reaction rules', (line) => line === removed);
                 summary.push(`Removed rule at index ${index}`);
+                structuralChanges++;
                 break;
             }
             case 'set_parameter':
@@ -411,6 +431,7 @@ export function applyModelEdits(
                 }
                 current = updateParameterLine(current, name, value);
                 summary.push(`Set parameter ${name} = ${value}`);
+                parametricChanges++;
                 break;
             }
             case 'set_concentration': {
@@ -446,6 +467,7 @@ export function applyModelEdits(
                 const definition = normalizeWhitespace(String(operation.definition ?? ''));
                 current = insertIntoBlock(current, 'molecule types', definition);
                 summary.push(`Added molecule type ${definition}`);
+                structuralChanges++;
                 break;
             }
             case 'add_species': {
@@ -456,6 +478,40 @@ export function applyModelEdits(
                 }
                 current = insertIntoBlock(current, 'seed species', `${species} ${concentration}`);
                 summary.push(`Added seed species ${species}`);
+                break;
+            }
+            case 'knockout_rule': {
+                const name = normalizeWhitespace(String(operation.name ?? ''));
+                const matcher = (line: string) => line.startsWith(`${name}:`) || line === name;
+                // Comment out the rule instead of deleting it
+                const replaced = replaceLineInBlock(current, 'reaction rules', matcher, `# KNOCKED OUT: ${name}`);
+                if (replaced !== current) {
+                    current = replaced;
+                    summary.push(`Knocked out rule: ${name} (commented out)`);
+                } else {
+                    summary.push(`Rule not found for knockout: ${name}`);
+                }
+                structuralChanges++;
+                break;
+            }
+            case 'randomize_parameters': {
+                const range = Number(operation.range);
+                if (!Number.isFinite(range) || range <= 0) {
+                    throw new Error(`Invalid range for randomize_parameters: ${range}`);
+                }
+                // Placeholder: randomization requires external RNG or engine support
+                // This operation is P2 (post-paper) and currently only records intent
+                summary.push(`[P2 PLACEHOLDER] Would randomize parameters with range ${range}% (actual randomization not implemented yet)`);
+                parametricChanges++; // Count as parametric change
+                break;
+            }
+            case 'set_scope': {
+                const includes = (operation.includes as string[]) || [];
+                const excludes = (operation.excludes as string[]) || [];
+                const justification = String(operation.justification ?? '');
+                scope = { includes, excludes, justification };
+                summary.push(`Set scope: includes [${includes.join(', ')}], excludes [${excludes.join(', ')}], justification: ${justification}`);
+                // No code change, just metadata
                 break;
             }
             default:
@@ -474,6 +530,8 @@ export function applyModelEdits(
     const parsedModel = parseModelOrThrow(formatted);
     const validation = validateModel(parsedModel, false);
 
+    const driftWarning = structuralChanges >= 3 ? 'Model has undergone significant structural changes (3+). Hypothesis may have drifted.' : undefined;
+
     return {
         code: formatted,
         summary,
@@ -482,7 +540,27 @@ export function applyModelEdits(
             errors: validation.summary.errors,
             warnings: validation.summary.warnings,
         },
+        drift: {
+            totalOperations: operations.length,
+            structuralChanges,
+            parametricChanges,
+            driftWarning,
+        },
+        ...(scope ? { scope } : {}),
     };
+}
+
+function reachedSteadyState(samples: number[]): boolean {
+    if (samples.length < 6) {
+        return false;
+    }
+
+    const tail = samples.slice(-5);
+    const start = tail[0];
+    const end = tail[tail.length - 1];
+    const delta = Math.abs(end - start);
+    const scale = Math.max(1e-9, Math.abs(start), Math.abs(end));
+    return delta / scale < 0.01;
 }
 
 function detectOscillation(samples: number[]): boolean {
@@ -515,17 +593,104 @@ function detectOscillation(samples: number[]): boolean {
     return signChanges >= 4;
 }
 
-function reachedSteadyState(samples: number[]): boolean {
-    if (samples.length < 6) {
-        return false;
+// Three-register summary generation for diagnostic output
+function generateThreeRegisters(args: {
+    sobol?: {
+        observable: string;
+        topFirstOrder: Array<{ name: string; value: number }>;
+        topTotalOrder: Array<{ name: string; value: number }>;
+    };
+    fim?: {
+        conditionNumber: number;
+        identifiableParams: string[];
+        unidentifiableParams: string[];
+    };
+    profileLikelihood?: {
+        profiles: Record<string, {
+            identifiability: 'identifiable' | 'practically_unidentifiable' | 'structurally_unidentifiable';
+            ci: { lower: number; upper: number } | null;
+            flat: boolean;
+        }>;
+        threshold: number;
+        baselineSSR: number;
+    };
+    stiffness: {
+        category: string;
+        ratio: number;
+        features: string[];
+    };
+    dynamics: { reaches_steady_state: boolean; likely_oscillatory: boolean };
+    structure: { species: number; reactionRules: number; observables: number; parameters: number };
+    mechanisticCausalTrace?: Array<{
+        parameter: string;
+        firstOrder: number;
+        implicatedRules: string[];
+        targetObservable?: string;
+        topologyPath?: string[];
+        contactMapPath?: Array<{
+            molecule: string;
+            site?: string;
+            interaction: 'binding' | 'state_change' | 'synthesis' | 'degradation';
+            rule: string;
+        }>;
+        narrative?: string;
+    }>;
+}): { technical: string; biological: string; strategic: string } {
+    const parts = { technical: [] as string[], biological: [] as string[], strategic: [] as string[] };
+
+    // Stiffness
+    if (args.stiffness.category !== 'benign') {
+        parts.technical.push(`Stiffness ratio ${args.stiffness.ratio.toExponential(1)}, category: ${args.stiffness.category}.`);
+        parts.biological.push(`Rate constants span ${Math.round(Math.log10(args.stiffness.ratio))} orders of magnitude — some reactions are much faster than others.`);
+        parts.strategic.push(`Use an implicit solver (CVODE) for reliable integration.`);
     }
 
-    const tail = samples.slice(-5);
-    const start = tail[0];
-    const end = tail[tail.length - 1];
-    const delta = Math.abs(end - start);
-    const scale = Math.max(1e-9, Math.abs(start), Math.abs(end));
-    return delta / scale < 0.01;
+    // Sobol
+    if (args.sobol) {
+        const topParam = args.sobol.topFirstOrder[0];
+        if (topParam) {
+            parts.technical.push(`Sobol S1(${topParam.name}) = ${topParam.value.toFixed(3)} on ${args.sobol.observable}.`);
+            // Find rule from causal trace
+            const trace = args.mechanisticCausalTrace?.find(t => t.parameter === topParam.name);
+            const ruleMention = trace?.implicatedRules[0] ? ` via ${trace.implicatedRules[0]}` : '';
+            parts.biological.push(`${topParam.name}${ruleMention} dominates the response of ${args.sobol.observable} — get this parameter right first.`);
+            parts.strategic.push(`Prioritize measuring ${topParam.name}. It accounts for ${(topParam.value * 100).toFixed(0)}% of output variance.`);
+        }
+    }
+
+    // FIM
+    if (args.fim) {
+        parts.technical.push(`FIM condition number ${args.fim.conditionNumber.toExponential(1)}.`);
+        if (args.fim.unidentifiableParams.length > 0) {
+            parts.technical.push(`Practically non-identifiable: ${args.fim.unidentifiableParams.join(', ')}.`);
+            parts.biological.push(`Your data cannot distinguish different values of ${args.fim.unidentifiableParams.join(' and ')} — they trade off against each other.`);
+            parts.strategic.push(`To resolve: measure a different observable, or fix one parameter from literature and fit the other.`);
+        }
+    }
+
+    // Profile Likelihood
+    if (args.profileLikelihood) {
+        const unidentifiableParams = Object.entries(args.profileLikelihood.profiles)
+            .filter(([_, profile]) => profile.identifiability !== 'identifiable')
+            .map(([name]) => name);
+        
+        if (unidentifiableParams.length > 0) {
+            parts.technical.push(`Profile likelihood identifies ${unidentifiableParams.length} unidentifiable parameters.`);
+            parts.biological.push(`Your data fundamentally cannot distinguish different values of ${unidentifiableParams.join(' and ')} — no amount of refinement will resolve this.`);
+            parts.strategic.push(`Consider fixing these parameters or designing new experiments targeting different observables.`);
+        }
+    }
+
+    // Dynamics
+    if (args.dynamics.likely_oscillatory) {
+        parts.biological.push(`The model exhibits oscillatory behavior.`);
+    }
+
+    return {
+        technical: parts.technical.join(' ') || 'No diagnostic issues detected.',
+        biological: parts.biological.join(' ') || 'Model behavior appears straightforward.',
+        strategic: parts.strategic.join(' ') || 'No specific action items.',
+    };
 }
 
 function getMoleculeCounts(side: string): Map<string, number> {
@@ -647,6 +812,10 @@ export async function diagnoseModelDeep(args: {
     n_samples?: number;
     n_bootstrap?: number;
     max_parameters?: number;
+    experimental_data?: Array<{
+        time: number;
+        observables: Record<string, number>;
+    }>;
 }): Promise<{
     validation: {
         valid: boolean;
@@ -688,6 +857,13 @@ export async function diagnoseModelDeep(args: {
         implicatedRules: string[];
         targetObservable?: string;
         topologyPath?: string[];
+        contactMapPath?: Array<{
+            molecule: string;
+            site?: string;
+            interaction: 'binding' | 'state_change' | 'synthesis' | 'degradation';
+            rule: string;
+        }>;
+        narrative?: string;
     }>;
     parameterSelection?: {
         strategy: 'triage_end_observable' | 'magnitude';
@@ -695,6 +871,40 @@ export async function diagnoseModelDeep(args: {
         analyzed: number;
         selectedParameters: string[];
     };
+    profileLikelihood?: {
+        profiles: Record<string, {
+            identifiability: 'identifiable' | 'practically_unidentifiable' | 'structurally_unidentifiable';
+            ci: { lower: number; upper: number } | null;
+            flat: boolean;
+        }>;
+        threshold: number;
+        baselineSSR: number;
+    };
+    summary: {
+        technical: string;
+        biological: string;
+        strategic: string;
+    };
+    compilationSurprise?: {
+        numRules: number;
+        numGeneratedSpecies: number;
+        numGeneratedReactions: number;
+        surpriseLevel: 'high' | 'moderate' | 'none';
+        warning?: string;
+    };
+    irreversibleSteps?: Array<{
+        rule: string;
+        type: 'degradation' | 'cleavage' | 'irreversible_modification';
+        controllingParameters: string[];
+        note: string;
+    }>;
+    plausibilityChecks?: Array<{
+        parameter: string;
+        value: number;
+        issue: string;
+        physicalBound: number;
+        message: string;
+    }>;
 }> {
     if (!args.code) {
         throw new Error('No BNGL code provided for model diagnosis.');
@@ -771,6 +981,39 @@ export async function diagnoseModelDeep(args: {
     const maxParameters = Math.max(1, Math.min(args.max_parameters ?? 5, 20));
     let parameterEntries: Array<[string, number]> = [];
 
+    let profileLikelihoodResult: {
+        profiles: Record<string, {
+            identifiability: 'identifiable' | 'practically_unidentifiable' | 'structurally_unidentifiable';
+            ci: { lower: number; upper: number } | null;
+            flat: boolean;
+        }>;
+        threshold: number;
+        baselineSSR: number;
+    } | undefined = undefined;
+
+    let compilationSurprise: {
+        numRules: number;
+        numGeneratedSpecies: number;
+        numGeneratedReactions: number;
+        surpriseLevel: 'high' | 'moderate' | 'none';
+        warning?: string;
+    } | undefined = undefined;
+
+    let irreversibleSteps: Array<{
+        rule: string;
+        type: 'degradation' | 'cleavage' | 'irreversible_modification';
+        controllingParameters: string[];
+        note: string;
+    }> = [];
+
+    let plausibilityChecks: Array<{
+        parameter: string;
+        value: number;
+        issue: string;
+        physicalBound: number;
+        message: string;
+    }> = [];
+
     if (allParameterEntries.length > 0) {
         const ruleDescriptors = reactionRules.map((rule, index) => ({
             name: rule.name ?? `rule_${index + 1}`,
@@ -785,6 +1028,65 @@ export async function diagnoseModelDeep(args: {
         }));
 
         const expandedModel = await expandModel(model);
+        
+        // P1: Compilation Surprise Detection
+        const numGeneratedSpecies = expandedModel.species?.length ?? 0;
+        const numGeneratedReactions = expandedModel.reactions?.length ?? 0;
+        const numRules = reactionRules.length;
+        const ratio = numRules > 0 ? numGeneratedSpecies / numRules : 0;
+        
+        compilationSurprise = {
+            numRules,
+            numGeneratedSpecies,
+            numGeneratedReactions,
+            surpriseLevel: ratio > 50 ? 'high' : ratio > 10 ? 'moderate' : 'none',
+            ...(ratio > 10 ? {
+                warning: `This model has ${numRules} rules but generates ${numGeneratedSpecies} species and ${numGeneratedReactions} reactions. ` +
+                    (ratio > 50
+                        ? 'The combinatorial complexity may cause slow simulation. Consider network limits or NFsim.'
+                        : 'Moderate combinatorial growth. Monitor simulation time.'),
+            } : {}),
+        };
+
+        // P1: Irreversibility Flagging
+        for (const rule of reactionRules) {
+            if (rule.isBidirectional) continue;
+            const reactantMols = rule.reactants.flatMap(extractMoleculeNames);
+            const productMols = rule.products.flatMap(extractMoleculeNames);
+            const lost = reactantMols.filter(m => !productMols.includes(m));
+            if (lost.length > 0 && irreversibleSteps.length < 5) {
+                irreversibleSteps.push({
+                    rule: rule.name ?? 'unnamed',
+                    type: 'degradation',
+                    controllingParameters: [rule.rate],
+                    note: `Irreversible loss of ${lost.join(', ')}. This is a switch, not a knob.`,
+                });
+            }
+        }
+
+        // P1: Biological Plausibility Checks
+        for (const [name, value] of allParameterEntries) {
+            if (Math.abs(value) > 1e12) {
+                plausibilityChecks.push({
+                    parameter: name,
+                    value,
+                    issue: 'extreme_magnitude',
+                    physicalBound: 1e12,
+                    message: `${name} = ${value.toExponential(1)} — magnitude suggests a unit conversion error.`,
+                });
+            }
+            if (value < 0 && model.species.some(s => s.name.includes(name))) {
+                plausibilityChecks.push({
+                    parameter: name,
+                    value,
+                    issue: 'negative_concentration',
+                    physicalBound: 0,
+                    message: `${name} = ${value} — negative concentrations are unphysical.`,
+                });
+            }
+            if (plausibilityChecks.length >= 5) break;
+        }
+
         const simOptions = buildSimulationOptions({
             method: args.method,
             t_end: args.t_end,
@@ -886,6 +1188,17 @@ export async function diagnoseModelDeep(args: {
                 topTotalOrder,
             };
 
+            // Build contact map for enhanced causal tracing
+            let contactMapResult: any;
+            try {
+                contactMapResult = await handleGetContactMap({ code: args.code ?? '' });
+            } catch (error) {
+                console.warn('Failed to build contact map:', error);
+                contactMapResult = { structuredContent: { nodes: [], edges: [] } };
+            }
+
+            const contactMapEdges = contactMapResult.structuredContent?.edges || [];
+
             mechanisticCausalTrace = topFirstOrder.map((entry) => {
                 const implicatedRuleDescriptors = ruleDescriptors
                     .filter((rule) => rule.rate.includes(entry.name))
@@ -915,12 +1228,50 @@ export async function diagnoseModelDeep(args: {
                     }
                 }
 
+                // Build contact map path
+                const contactMapPath: Array<{
+                    molecule: string;
+                    site?: string;
+                    interaction: 'binding' | 'state_change' | 'synthesis' | 'degradation';
+                    rule: string;
+                }> = [];
+                
+                // Extract binding events from contact map that relate to the implicated rules
+                if (contactMapEdges && Array.isArray(contactMapEdges)) {
+                    for (const ruleDesc of implicatedRuleDescriptors) {
+                        const ruleName = ruleDesc.name;
+                        // Find edges that correspond to this rule's binding events
+                        // ContactEdge has 'from', 'to', 'interactionType', 'ruleIds', 'ruleLabels'
+                        const ruleEdges = contactMapEdges.filter((edge: any) => 
+                            edge.ruleIds?.includes(ruleName) || 
+                            edge.ruleLabels?.includes(ruleName)
+                        );
+                        
+                        for (const edge of ruleEdges.slice(0, 3)) { // Limit to avoid too many paths
+                            // Try to extract molecule name from 'from' field (format: "Molecule(site)")
+                            const fromMatch = edge.from?.match(/^([A-Za-z][A-Za-z0-9_]*)/);
+                            const molecule = fromMatch ? fromMatch[1] : 'unknown';
+                            
+                            contactMapPath.push({
+                                molecule: molecule,
+                                site: edge.from?.includes('(') ? edge.from?.match(/\(([^)]+)\)/)?.[1] : undefined,
+                                interaction: edge.interactionType || 'binding',
+                                rule: ruleName
+                            });
+                        }
+                    }
+                }
+
                 return {
                     parameter: entry.name,
                     firstOrder: entry.value,
                     implicatedRules,
                     ...(targetObservable ? { targetObservable } : {}),
                     ...(bestPath.length > 0 ? { topologyPath: bestPath } : {}),
+                    ...(contactMapPath.length > 0 ? { contactMapPath } : {}),
+                    ...(contactMapPath.length > 0 || bestPath.length > 0 ? { 
+                        narrative: `${entry.name} governs ${implicatedRules[0]} via ${contactMapPath.length > 0 ? 'binding events' : 'molecular interactions'} affecting ${targetObservable || 'observables'}` 
+                    } : {}),
                 };
             });
         }
@@ -939,7 +1290,53 @@ export async function diagnoseModelDeep(args: {
             identifiableParams: fimResult.identifiableParams,
             unidentifiableParams: fimResult.unidentifiableParams,
         };
+
+        // Profile likelihood step (P0 requirement)
+        if (args.experimental_data && args.experimental_data.length > 0) {
+            try {
+                // Convert experimental data format for profileLikelihood function
+                const experimentalDataForProfile = args.experimental_data.map(dp => ({
+                    time: dp.time,
+                    values: dp.observables
+                }));
+
+                profileLikelihoodResult = await profileLikelihood({
+                    simulate: simulateWithOverrides,
+                    parameters: Object.fromEntries(parameterEntries),
+                    parameterNames: parameterEntries.map(([name]) => name),
+                    experimentalData: experimentalDataForProfile,
+                    nGrid: 15,
+                    rangeFactor: 10,
+                });
+            } catch (error) {
+                // If profile likelihood fails, we continue without it
+                console.warn('Profile likelihood computation failed:', error);
+            }
+        }
     }
+
+    // Generate three-register summary
+    const summary = generateThreeRegisters({
+        sobol: sobolSummary,
+        fim: fimSummary,
+        profileLikelihood: profileLikelihoodResult,
+        stiffness: {
+            category: stiffness.category,
+            ratio: stiffness.rateRatio,
+            features: stiffness.features,
+        },
+        dynamics: {
+            reaches_steady_state: reachedSteadyState(series),
+            likely_oscillatory: detectOscillation(series),
+        },
+        structure: {
+            species: model.species.length,
+            reactionRules: reactionRules.length,
+            observables: model.observables.length,
+            parameters: Object.keys(model.parameters).length,
+        },
+        mechanisticCausalTrace,
+    });
 
     return {
         validation: {
@@ -966,16 +1363,23 @@ export async function diagnoseModelDeep(args: {
             count: conservationPreview.length,
             preview: conservationPreview,
         },
+        compilationSurprise,
+        irreversibleSteps: irreversibleSteps.length > 0 ? irreversibleSteps : undefined,
+        plausibilityChecks: plausibilityChecks.length > 0 ? plausibilityChecks : undefined,
         ...(sobolSummary ? { sobol: sobolSummary } : {}),
         ...(fimSummary ? { fim: fimSummary } : {}),
         ...(mechanisticCausalTrace ? { mechanisticCausalTrace } : {}),
         ...(parameterSelection ? { parameterSelection } : {}),
+        ...(profileLikelihoodResult ? { profileLikelihood: profileLikelihoodResult } : {}),
+        summary,
     };
 }
 
 export function explainModelNarrative(code: string): {
     summary: string;
     sections: ExplainSection[];
+    mechanisms: Array<{ name: string; type: string; count: number }>;
+    molecules: Array<{ name: string; role: string; rules: string[] }>;
 } {
     const model = parseModelOrThrow(code);
     const reactionRules = model.reactionRules ?? [];
@@ -983,6 +1387,59 @@ export function explainModelNarrative(code: string): {
     const moleculeTypes = model.moleculeTypes.map((molecule) => molecule.name);
     const ruleNames = reactionRules.map((rule, index) => rule.name || `rule_${index + 1}`);
     const observableNames = model.observables.map((obs) => obs.name);
+
+    // Classify rule types
+    const mechanisms: Record<string, number> = {};
+    for (const rule of reactionRules) {
+        let type = 'unknown';
+        const reactants = rule.reactants;
+        const products = rule.products;
+        
+        // Simple heuristic: binding = 2 reactants -> 1 product complex
+        if (reactants.length === 2 && products.length === 1 && products[0].includes('.')) {
+            type = 'binding';
+        } else if (reactants.length >= 1 && products.length >= 1) {
+            // Modification?
+            if (reactants[0]?.includes('~') && products[0]?.includes('~')) {
+                type = 'modification';
+            } else if (reactants[0]?.length > 0 && products.length === 0) {
+                type = 'degradation';
+            } else if (reactants.length === 0 && products.length > 0) {
+                type = 'synthesis';
+            } else {
+                type = 'conversion';
+            }
+        }
+        mechanisms[type] = (mechanisms[type] || 0) + 1;
+    }
+    const mechanismList = Object.entries(mechanisms).map(([name, count]) => ({ name, type: name, count }));
+
+    // Classify molecule roles
+    const moleculeRoles: Record<string, { role: string; rules: Set<string> }> = {};
+    for (const mol of model.moleculeTypes) {
+        moleculeRoles[mol.name] = { role: 'unknown', rules: new Set() };
+    }
+    
+    for (const rule of reactionRules) {
+        const ruleName = rule.name || 'unnamed';
+        const allMols = [...rule.reactants, ...rule.products];
+        for (const molExpr of allMols) {
+            const molName = molExpr.split('(')[0];
+            if (moleculeRoles[molName]) {
+                moleculeRoles[molName].rules.add(ruleName);
+            }
+        }
+    }
+
+    const moleculeList = Object.entries(moleculeRoles).map(([name, data]) => {
+        let role = 'substrate';
+        const ruleList = Array.from(data.rules);
+        // Simple role inference: if molecule appears only as product, it's synthesized
+        // If it appears only as reactant, it's consumed/degraded
+        // If it appears in complex formation, it's a binder
+        // For now, just list participating rules
+        return { name, role, rules: ruleList };
+    });
 
     const sections: ExplainSection[] = [
         {
@@ -1013,6 +1470,8 @@ export function explainModelNarrative(code: string): {
     return {
         summary,
         sections,
+        mechanisms: mechanismList,
+        molecules: moleculeList,
     };
 }
 

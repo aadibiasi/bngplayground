@@ -422,19 +422,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
-        name: 'diagnose_model',
-        description: 'Run deep diagnosis including structure, stiffness, simulation dynamics, and conservation hints.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            code: { type: 'string', description: 'BNGL model code' },
-            max_parameters: { type: 'number', description: 'Maximum number of parameters to include in Sobol/FIM sub-analysis (default: 5)' },
-            method: { type: 'string', enum: [...simulationMethods], description: 'Simulation method used for dynamic probing' },
-            t_end: { type: 'number', description: 'End time for dynamic probing simulation' },
-            n_steps: { type: 'number', description: 'Number of simulation steps for dynamic probing' },
-          },
-          required: ['code'],
-        },
+         name: 'diagnose_model',
+         description: 'Run deep diagnosis including structure, stiffness, simulation dynamics, and conservation hints.',
+         inputSchema: {
+           type: 'object',
+           properties: {
+             code: { type: 'string', description: 'BNGL model code' },
+             max_parameters: { type: 'number', description: 'Maximum number of parameters to include in Sobol/FIM sub-analysis (default: 5)' },
+             method: { type: 'string', enum: [...simulationMethods], description: 'Simulation method used for dynamic probing' },
+             t_end: { type: 'number', description: 'End time for dynamic probing simulation' },
+             n_steps: { type: 'number', description: 'Number of simulation steps for dynamic probing' },
+             experimental_data: {
+               type: 'array',
+               items: {
+                 type: 'object',
+                 properties: {
+                   time: { type: 'number' },
+                   observables: { type: 'object' }
+                 }
+               },
+               description: 'Experimental data for profile likelihood. When provided, enables identifiability classification.'
+             },
+           },
+           required: ['code'],
+         },
       },
       {
         name: 'explain_model',

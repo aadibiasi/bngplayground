@@ -249,6 +249,10 @@ const editOperationSchema = z.discriminatedUnion('action', [
     z.object({ action: z.literal('remove_observable'), name: z.string() }).strict(),
     z.object({ action: z.literal('add_molecule_type'), definition: z.string() }).strict(),
     z.object({ action: z.literal('add_species'), species: z.string(), concentration: finiteNumber }).strict(),
+    // P2 operations
+    z.object({ action: z.literal('knockout_rule'), name: z.string() }).strict(),
+    z.object({ action: z.literal('randomize_parameters'), range: finiteNumber }).strict(),
+    z.object({ action: z.literal('set_scope'), includes: z.array(z.string()), excludes: z.array(z.string()), justification: z.string() }).strict(),
 ]);
 
 export const editModelArgsSchema = z.object({
@@ -264,6 +268,10 @@ export const diagnoseModelArgsSchema = z.object({
     method: z.enum(simulationMethods).optional(),
     t_end: finiteNumber.nonnegative().optional(),
     n_steps: positiveInt.optional(),
+    experimental_data: z.array(z.object({
+        time: z.number(),
+        observables: z.record(z.number()),
+    })).optional().describe('Experimental data for profile likelihood. When provided, enables identifiability classification.'),
 }).strict();
 
 export const explainModelArgsSchema = z.object({

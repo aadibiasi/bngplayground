@@ -3,6 +3,7 @@ import { ToolArgs, ToolResult } from '../types/index.js';
 import { composeModelArgsSchema } from '../schemas/index.js';
 import { createToolResult, parseArgs } from '../services/engine.js';
 import { composeModelFromStatements } from '../services/intelligence.js';
+import { structureError } from '../services/errors.js';
 
 type ComposeModelArgs = {
     statements: string[];
@@ -12,7 +13,12 @@ type ComposeModelArgs = {
 };
 
 export async function handleComposeModel(args: ToolArgs): Promise<ToolResult<any>> {
-    const parsedArgs = parseArgs('compose_model', composeModelArgsSchema, args) as ComposeModelArgs;
-    const composed = composeModelFromStatements(parsedArgs);
-    return createToolResult(composed);
+    try {
+        const parsedArgs = parseArgs('compose_model', composeModelArgsSchema, args) as ComposeModelArgs;
+        const composed = composeModelFromStatements(parsedArgs);
+        return createToolResult(composed);
+    } catch (error) {
+        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        return createToolResult(structured);
+    }
 }

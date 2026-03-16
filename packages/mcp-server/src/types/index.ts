@@ -71,3 +71,11 @@ export type ValidateModelResult = {
 };
 
 export type ParsedSpeciesGraph = ReturnType<typeof BNGLParser.parseSpeciesGraph>;
+
+export interface MCPErrorResult {
+    error: string;
+    diagnosis: string;
+    recovery: string;
+    severity: 'fatal' | 'recoverable' | 'warning';
+    relatedTools?: string[];
+}

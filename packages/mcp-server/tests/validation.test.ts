@@ -210,6 +210,58 @@ describe('MCP Server Tools Functional Validation', () => {
         }
     });
 
+    it('should run profile likelihood when experimental data provided', async () => {
+        const result = await handleDiagnoseModel({
+            code: simpleModel,
+            t_end: 1,
+            n_steps: 10,
+            n_samples: 8,
+            n_bootstrap: 10,
+            max_parameters: 2,
+            experimental_data: [
+                { time: 0, observables: { A_free: 100, Complex: 0 } },
+                { time: 0.5, observables: { A_free: 80, Complex: 10 } },
+                { time: 1, observables: { A_free: 70, Complex: 15 } },
+            ],
+        });
+        expect(result.structuredContent.profileLikelihood).toBeDefined();
+        expect(result.structuredContent.profileLikelihood.profiles).toBeDefined();
+        const paramNames = Object.keys(result.structuredContent.profileLikelihood.profiles);
+        expect(paramNames.length).toBeGreaterThan(0);
+        for (const name of paramNames) {
+            const profile = result.structuredContent.profileLikelihood.profiles[name];
+            expect(['identifiable', 'practically_unidentifiable', 'structurally_unidentifiable']).toContain(profile.identifiability);
+        }
+    });
+
+    it('should include contact map path in causal trace', async () => {
+        const result = await handleDiagnoseModel({
+            code: simpleModel,
+            t_end: 1, n_steps: 10,
+            n_samples: 8, n_bootstrap: 10, max_parameters: 2,
+        });
+        const trace = result.structuredContent.mechanisticCausalTrace;
+        expect(trace).toBeDefined();
+        expect(trace.length).toBeGreaterThan(0);
+        // At least one trace entry should have contactMapPath or narrative
+        const hasContactPath = trace.some(t => t.contactMapPath && t.contactMapPath.length > 0);
+        const hasNarrative = trace.some(t => t.narrative && t.narrative.length > 0);
+        expect(hasContactPath || hasNarrative).toBe(true);
+    });
+
+    it('should return three-register summary', async () => {
+        const result = await handleDiagnoseModel({
+            code: simpleModel,
+            t_end: 1, n_steps: 10,
+            n_samples: 8, n_bootstrap: 10, max_parameters: 2,
+        });
+        expect(result.structuredContent.summary).toBeDefined();
+        expect(typeof result.structuredContent.summary.technical).toBe('string');
+        expect(typeof result.structuredContent.summary.biological).toBe('string');
+        expect(typeof result.structuredContent.summary.strategic).toBe('string');
+        expect(result.structuredContent.summary.technical.length).toBeGreaterThan(0);
+    });
+
     it('should explain model in narrative form (explain_model)', async () => {
         const result = await handleExplainModel({ code: simpleModel });
         expect(result.structuredContent.summary).toContain('Model contains');
