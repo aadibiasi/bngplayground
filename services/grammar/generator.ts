@@ -15,6 +15,61 @@ const ACTION_SITE_CONFIG: Record<string, { site: string, states: string[], modFr
   cleaves: { site: 'cl', states: ['i', 'c'], modFrom: 'i', modTo: 'c' },
 };
 
+const DEFAULT_PARAMETER_VALUES: Record<string, number> = {
+  k_on: 0.1,
+  k_off: 0.01,
+  k_cat: 1.0,
+  k_dephos: 0.5,
+  k_syn: 0.1,
+  k_deg: 0.01,
+  k_dim: 0.1,
+  k_undim: 0.01,
+  k_trans: 0.1,
+  k_act: 1.0,
+  k_inhib: 1.0,
+  k_cleave: 0.5,
+  k_ubiq: 0.5,
+  k_deubiq: 0.5,
+  k_meth: 0.5,
+  k_demeth: 0.5,
+  k_acet: 0.5,
+  k_deacet: 0.5,
+  k_fwd: 1.0,
+  k_rev: 0.1,
+};
+
+const isNumericToken = (value: string): boolean => /^[0-9.e-]+$/i.test(value);
+
+function defaultForwardRate(action: string): string {
+  switch (action) {
+    case 'binds': return 'k_on';
+    case 'phosphorylates': return 'k_cat';
+    case 'dephosphorylates': return 'k_dephos';
+    case 'synthesizes': return 'k_syn';
+    case 'degrades': return 'k_deg';
+    case 'dimerizes': return 'k_dim';
+    case 'translocates': return 'k_trans';
+    case 'activates': return 'k_act';
+    case 'inhibits': return 'k_inhib';
+    case 'cleaves': return 'k_cleave';
+    case 'ubiquitinates': return 'k_ubiq';
+    case 'deubiquitinates': return 'k_deubiq';
+    case 'methylates': return 'k_meth';
+    case 'demethylates': return 'k_demeth';
+    case 'acetylates': return 'k_acet';
+    case 'deacetylates': return 'k_deacet';
+    default: return 'k_fwd';
+  }
+}
+
+function defaultReverseRate(action: string): string {
+  switch (action) {
+    case 'binds': return 'k_off';
+    case 'dimerizes': return 'k_undim';
+    default: return 'k_rev';
+  }
+}
+
 export class BNGLGenerator {
   static generate(sentences: BioSentence[]): string {
     const definitions = sentences.filter(s => s.type === 'DEFINITION' && s.isValid) as DefinitionSentence[];
@@ -84,11 +139,17 @@ export class BNGLGenerator {
       }
     });
 
-    // Collect all defined rates for parameters block
-    const customRates = new Set<string>();
+    // Collect rates actually referenced by generated rules to avoid noisy parameter blocks.
+    const requiredRates = new Set<string>();
     interactions.forEach(int => {
-      if (int.rate && !/^[0-9.e-]+$/.test(int.rate)) customRates.add(int.rate);
-      if (int.reverseRate && !/^[0-9.e-]+$/.test(int.reverseRate)) customRates.add(int.reverseRate);
+      const fwd = int.rate || defaultForwardRate(int.action);
+      if (!isNumericToken(fwd)) requiredRates.add(fwd);
+
+      const needsReverse = int.isBidirectional || int.action === 'binds' || int.action === 'dimerizes';
+      if (needsReverse) {
+        const rev = int.reverseRate || defaultReverseRate(int.action);
+        if (!isNumericToken(rev)) requiredRates.add(rev);
+      }
     });
 
     // 3. Generate BNGL Blocks
@@ -97,26 +158,12 @@ export class BNGLGenerator {
     // Parameters
     lines.push('begin parameters');
     lines.push('  # Auto-generated rate constants');
-    lines.push('  k_on 0.1');
-    lines.push('  k_off 0.01');
-    lines.push('  k_cat 1.0');
-    lines.push('  k_dephos 0.5');
-    lines.push('  k_syn 0.1');
-    lines.push('  k_deg 0.01');
-    lines.push('  k_dim 0.1');
-    lines.push('  k_undim 0.01');
-    lines.push('  k_trans 0.1');
-    lines.push('  k_act 1.0');
-    lines.push('  k_inhib 1.0');
-    lines.push('  k_cleave 0.5');
-    lines.push('  k_ubiq 0.5');
-    lines.push('  k_deubiq 0.5');
-    lines.push('  k_meth 0.5');
-    lines.push('  k_demeth 0.5');
-    lines.push('  k_acet 0.5');
-    lines.push('  k_deacet 0.5');
-    lines.push('  k_fwd 1.0');
-    lines.push('  k_rev 0.1');
+    const sortedRates = Array.from(requiredRates).sort();
+    const emittedRates = sortedRates.length > 0 ? sortedRates : ['k_fwd'];
+    emittedRates.forEach((rateName) => {
+      const defaultValue = DEFAULT_PARAMETER_VALUES[rateName] ?? 1.0;
+      lines.push(`  ${rateName} ${defaultValue}`);
+    });
     lines.push('end parameters');
 
     // Molecule Types
@@ -140,7 +187,7 @@ export class BNGLGenerator {
     lines.push('end molecule types');
 
     // Seed Species
-    lines.push('begin species');
+    lines.push('begin seed species');
     if (initializations.length > 0) {
       initializations.forEach(init => {
         const name = init.molecule.name;
@@ -175,7 +222,7 @@ export class BNGLGenerator {
         lines.push(`  ${name}(${sitesStr}) 100`);
       });
     }
-    lines.push('end species');
+    lines.push('end seed species');
 
     // Observables
     lines.push('begin observables');
@@ -200,8 +247,8 @@ export class BNGLGenerator {
       const ruleName = `rule${idx + 1}`;
       const s = int.subject.name;
       const o = int.object.name;
-      const rate = int.rate || 'k_fwd';
-      const revRate = int.reverseRate || 'k_rev';
+      const rate = int.rate || defaultForwardRate(int.action);
+      const revRate = int.reverseRate || defaultReverseRate(int.action);
 
       switch (int.action) {
         case 'binds':

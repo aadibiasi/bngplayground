@@ -50,6 +50,7 @@ export async function diagnoseModelDeep(args: {
     experimental_data?: Array<{
         time: number;
         observables: Record<string, number>;
+        errors?: Record<string, number>;
     }>;
 }): Promise<{
     validation: { valid: boolean; errors: number; warnings: number };
@@ -75,8 +76,9 @@ export async function diagnoseModelDeep(args: {
     irreversibleSteps?: Array<{ rule: string; type: string; controllingParameters: string[]; note: string }>;
     plausibilityChecks?: Array<{ parameter: string; value: number; issue: string; physicalBound: number; message: string }>;
     unreachableAnalysis?: { unreachableRules: string[]; count: number; note: string };
-    surprises?: Array<{ observable: string; surprise: string; severity: string }>;
+    surprises?: Array<{ type: 'overshoot' | 'oscillation' | 'decorrelation' | 'insensitive_parameter' | 'unexpected_sensitivity'; description: string; observable?: string; parameter?: string }>;
     diminishingReturns?: { detected: boolean; message: string };
+    convergenceAssessment?: { insightSaturated: boolean; recommendation: 'continue_analysis' | 'collect_more_data' | 'done'; message: string };
     crosstalkWarnings?: Array<{ molecule: string; pathways: number; rules: string[]; warning: string }>;
 }> {
     if (!args.code) {
@@ -122,6 +124,7 @@ export async function diagnoseModelDeep(args: {
 
     let sobolSummary: { observable: string; topFirstOrder: Array<{ name: string; value: number }>; topTotalOrder: Array<{ name: string; value: number }> } | undefined;
     let diminishingReturns: { detected: boolean; message: string } | undefined;
+    let convergenceAssessment: { insightSaturated: boolean; recommendation: 'continue_analysis' | 'collect_more_data' | 'done'; message: string } | undefined;
     let fimSummary: { conditionNumber: number; identifiableParams: string[]; unidentifiableParams: string[] } | undefined;
     let mechanisticCausalTrace: Array<{ parameter: string; firstOrder: number; implicatedRules: string[]; targetObservable?: string; topologyPath?: string[] }> | undefined;
     let parameterSelection: { strategy: string; candidates: number; analyzed: number; selectedParameters: string[] } | undefined;
@@ -251,6 +254,36 @@ export async function diagnoseModelDeep(args: {
             sobolSummary = { observable: firstSobol.observable, topFirstOrder, topTotalOrder };
             diminishingReturns = detectDiminishingReturns(topFirstOrder) ?? undefined;
 
+            const sensitiveParams = topFirstOrder.filter(p => Math.abs(p.value) > 0.01).map(p => p.name);
+            const hasStrongSignal = topFirstOrder.length > 0 && Math.abs(topFirstOrder[0].value) > 0.1;
+            const signalToNoise = hasStrongSignal ? Math.abs(topFirstOrder[0].value) / (Math.abs(topFirstOrder[0].value - (topTotalOrder[0]?.value ?? 0)) + 0.01) : 0;
+            
+            if (!hasStrongSignal) {
+                convergenceAssessment = {
+                    insightSaturated: false,
+                    recommendation: 'collect_more_data',
+                    message: 'No strong sensitivity signals detected. Collect more experimental data or reconsider observable selection.',
+                };
+            } else if (diminishingReturns?.detected && sensitiveParams.length <= 1) {
+                convergenceAssessment = {
+                    insightSaturated: true,
+                    recommendation: 'done',
+                    message: 'Single dominant parameter identified with clear sensitivity. Additional analysis unlikely to yield new insights.',
+                };
+            } else if (signalToNoise > 10) {
+                convergenceAssessment = {
+                    insightSaturated: true,
+                    recommendation: 'done',
+                    message: 'High signal-to-noise ratio (>10). First-order effects dominate; interaction effects are minimal.',
+                };
+            } else {
+                convergenceAssessment = {
+                    insightSaturated: false,
+                    recommendation: 'continue_analysis',
+                    message: 'Multiple sensitive parameters with notable interaction effects. Continue with FIM and profile likelihood analysis.',
+                };
+            }
+
             let contactMapResult: any;
             try {
                 contactMapResult = await handleGetContactMap({ code: args.code ?? '' });
@@ -323,7 +356,11 @@ export async function diagnoseModelDeep(args: {
 
         if (args.experimental_data && args.experimental_data.length > 0) {
             try {
-                const experimentalDataForProfile = args.experimental_data.map(dp => ({ time: dp.time, values: dp.observables }));
+                const experimentalDataForProfile = args.experimental_data.map(dp => ({ 
+                    time: dp.time, 
+                    values: dp.observables,
+                    ...(dp.errors ? { errors: dp.errors } : {})
+                }));
                 profileLikelihoodResult = await profileLikelihood({
                     simulate: simulateWithOverrides,
                     parameters: Object.fromEntries(parameterEntries),
@@ -360,6 +397,7 @@ export async function diagnoseModelDeep(args: {
         ...(unreachableRules.length > 0 ? { unreachableAnalysis: { unreachableRules, count: unreachableRules.length, note: `${unreachableRules.length} rule(s) cannot fire — their reactants are unreachable from seed species.` } } : {}),
         ...(surprises.length > 0 ? { surprises } : {}),
         ...(diminishingReturns ? { diminishingReturns } : {}),
+        ...(convergenceAssessment ? { convergenceAssessment } : {}),
         ...(crosstalkWarnings.length > 0 ? { crosstalkWarnings } : {}),
         ...(sobolSummary ? { sobol: sobolSummary } : {}),
         ...(fimSummary ? { fim: fimSummary } : {}),

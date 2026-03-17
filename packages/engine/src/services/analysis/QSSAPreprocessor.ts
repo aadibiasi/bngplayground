@@ -6,6 +6,12 @@
  */
 
 import type { BNGLModel } from '../../types';
+import { BNGLParser } from '../graph/core/BNGLParser';
+
+function extractSpeciesName(pattern: string): string {
+    const graph = BNGLParser.parseSpeciesGraph(pattern, false);
+    return graph.toString();
+}
 
 export interface QSSACandidate {
     species: string;
@@ -94,7 +100,7 @@ export function analyzeQSSA(
         
         const allMols = [...rule.reactants, ...rule.products];
         for (const molExpr of allMols) {
-            const molName = molExpr.split('(')[0];
+            const molName = extractSpeciesName(molExpr);
             if (speciesReactionMap[molName]) {
                 if (isFast) {
                     speciesReactionMap[molName].fast++;
@@ -211,7 +217,7 @@ export function applyQSSAReduction(
         
         // Products add to stoichiometry
         for (const prod of rule.products) {
-            const spName = prod.split('(')[0];
+            const spName = extractSpeciesName(prod);
             const idx = speciesIndex.get(spName);
             if (idx !== undefined) {
                 N[idx][r] += 1;
@@ -220,7 +226,7 @@ export function applyQSSAReduction(
         
         // Reactants subtract from stoichiometry
         for (const reac of rule.reactants) {
-            const spName = reac.split('(')[0];
+            const spName = extractSpeciesName(reac);
             const idx = speciesIndex.get(spName);
             if (idx !== undefined) {
                 N[idx][r] -= 1;
@@ -249,8 +255,8 @@ export function applyQSSAReduction(
     const ruleNamesModified: string[] = [];
     
     for (const rule of reactions) {
-        const hasEliminatedReactant = rule.reactants.some(r => eliminatedSet.has(r.split('(')[0]));
-        const hasEliminatedProduct = rule.products.some(p => eliminatedSet.has(p.split('(')[0]));
+        const hasEliminatedReactant = rule.reactants.some(r => eliminatedSet.has(extractSpeciesName(r)));
+        const hasEliminatedProduct = rule.products.some(p => eliminatedSet.has(extractSpeciesName(p)));
         
         if (hasEliminatedReactant || hasEliminatedProduct) {
             ruleNamesModified.push(rule.name ?? 'unnamed');

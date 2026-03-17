@@ -41,11 +41,27 @@ export function detectOscillation(samples: number[]): boolean {
     return signChanges >= 4;
 }
 
+function pearsonCorrelation(x: number[], y: number[]): number {
+    const n = x.length;
+    const meanX = x.reduce((a, b) => a + b, 0) / n;
+    const meanY = y.reduce((a, b) => a + b, 0) / n;
+    let cov = 0, varX = 0, varY = 0;
+    for (let i = 0; i < n; i++) {
+        const dx = x[i] - meanX;
+        const dy = y[i] - meanY;
+        cov += dx * dy;
+        varX += dx * dx;
+        varY += dy * dy;
+    }
+    return varX > 0 && varY > 0 ? cov / Math.sqrt(varX * varY) : 0;
+}
+
 export function detectSurprises(
     timeSeries: Array<Record<string, number>>,
     observableNames: string[],
-): Array<{ observable: string; surprise: string; severity: 'low' | 'medium' | 'high' }> {
-    const surprises: Array<{ observable: string; surprise: string; severity: 'low' | 'medium' | 'high' }> = [];
+    sobolResults?: Array<{ firstOrder: Map<string, number>; totalOrder: Map<string, number> }>,
+): Array<{ type: 'overshoot' | 'oscillation' | 'decorrelation' | 'insensitive_parameter' | 'unexpected_sensitivity'; description: string; observable?: string; parameter?: string }> {
+    const surprises: Array<{ type: 'overshoot' | 'oscillation' | 'decorrelation' | 'insensitive_parameter' | 'unexpected_sensitivity'; description: string; observable?: string; parameter?: string }> = [];
 
     for (const obs of observableNames) {
         const values = timeSeries.map(row => Number(row[obs] ?? 0));
@@ -61,9 +77,9 @@ export function detectSurprises(
         const maxIdx = values.indexOf(max);
         if (maxIdx > 0 && maxIdx < values.length - 1 && (max - last) > 0.2 * range && range / scale > 0.05) {
             surprises.push({
+                type: 'overshoot',
+                description: `Observable ${obs} overshoots at t=${timeSeries[maxIdx]?.time?.toFixed(1) ?? maxIdx} — peak ${max.toPrecision(3)} then settles to ${last.toPrecision(3)}.`,
                 observable: obs,
-                surprise: `Overshoots at t=${timeSeries[maxIdx]?.time?.toFixed(1) ?? maxIdx} — peak ${max.toPrecision(3)} then settles to ${last.toPrecision(3)}.`,
-                severity: (max - last) > 0.5 * range ? 'high' : 'medium',
             });
         }
 
@@ -75,21 +91,69 @@ export function detectSurprises(
         }
         if (signChanges >= 3 && range / scale > 0.05) {
             surprises.push({
+                type: 'oscillation',
+                description: `Observable ${obs} oscillates with ${signChanges} direction changes.`,
                 observable: obs,
-                surprise: `Oscillates with ${signChanges} direction changes.`,
-                severity: signChanges >= 6 ? 'high' : 'medium',
             });
         }
 
         if (range / scale < 0.001 && Math.abs(first) > 1e-6) {
             surprises.push({
+                type: 'insensitive_parameter',
+                description: `Observable ${obs} is effectively constant (range ${range.toExponential(1)} vs magnitude ${first.toExponential(1)}) — may not be informative.`,
                 observable: obs,
-                surprise: `Effectively constant (range ${range.toExponential(1)} vs magnitude ${first.toExponential(1)}) — may not be informative.`,
-                severity: 'low',
             });
         }
-
-        if (surprises.length >= 3) break;
     }
+
+    if (sobolResults && sobolResults.length > 0) {
+        const firstSobol = sobolResults[0];
+        if (firstSobol) {
+            for (const [param, value] of firstSobol.firstOrder) {
+                if (Math.abs(value) < 0.01) {
+                    surprises.push({
+                        type: 'insensitive_parameter',
+                        description: `Parameter ${param} contributes <1% variance but is included in the model — consider removing or constraining.`,
+                        parameter: param,
+                    });
+                }
+            }
+        }
+    }
+
+    if (observableNames.length >= 2) {
+        const midPoint = Math.floor(timeSeries.length / 2);
+        const early = timeSeries.slice(0, midPoint);
+        const late = timeSeries.slice(midPoint);
+
+        const n = observableNames.length;
+        let changes = 0;
+        for (let i = 0; i < n; i++) {
+            for (let j = i + 1; j < n; j++) {
+                const obs1 = observableNames[i];
+                const obs2 = observableNames[j];
+
+                const earlyV1 = early.map(row => Number(row[obs1] ?? 0));
+                const earlyV2 = early.map(row => Number(row[obs2] ?? 0));
+                const lateV1 = late.map(row => Number(row[obs1] ?? 0));
+                const lateV2 = late.map(row => Number(row[obs2] ?? 0));
+
+                const earlyCorr = pearsonCorrelation(earlyV1, earlyV2);
+                const lateCorr = pearsonCorrelation(lateV1, lateV2);
+
+                if (Math.abs(earlyCorr - lateCorr) > 0.5) {
+                    changes++;
+                }
+            }
+        }
+
+        if (changes > 0) {
+            surprises.push({
+                type: 'decorrelation',
+                description: `${changes} observable pair(s) show decorrelation between early and late time phases — dynamics change over time.`,
+            });
+        }
+    }
+
     return surprises.slice(0, 3);
 }

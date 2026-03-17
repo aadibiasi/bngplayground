@@ -1,3 +1,7 @@
+import { extractMoleculeNames } from '../../services/engine.js';
+
+export { extractMoleculeNames };
+
 export function buildMoleculeGraph(ruleDescriptors: Array<{ reactants: string[]; products: string[] }>): Map<string, Set<string>> {
     const graph = new Map<string, Set<string>>();
     const connect = (a: string, b: string) => {
@@ -64,20 +68,4 @@ export function findShortestPath(
     }
 
     return [];
-}
-
-export function extractMoleculeNames(pattern: string): string[] {
-    const names: string[] = [];
-    const regex = /\b([A-Za-z][A-Za-z0-9_]*)\(/g;
-    let match;
-    while ((match = regex.exec(pattern)) !== null) {
-        names.push(match[1]);
-    }
-    if (names.length === 0 && pattern.includes('(')) {
-        const simple = pattern.split('(')[0].trim();
-        if (simple) names.push(simple);
-    } else if (names.length === 0 && pattern.trim()) {
-        names.push(pattern.trim());
-    }
-    return names;
 }

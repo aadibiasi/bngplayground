@@ -8,9 +8,9 @@ import {
     insertIntoBlock,
 } from './utils/codeUtils.js';
 import { pickDefaultSeeds } from './utils/modelUtils.js';
-import { BioParser } from '../grammar/parser.js';
-import { BNGLGenerator } from '../grammar/generator.js';
-import type { DefinitionSentence } from '../grammar/types.js';
+import { BioParser } from '@grammar/parser.js';
+import { BNGLGenerator } from '@grammar/generator.js';
+import type { DefinitionSentence } from '@grammar/types.js';
 import type { ComposeSeedSpecies, ComposeAnalysis, ComposeMolecule } from './types.js';
 import { parseBNGLWithANTLR, formatBNGL } from '@bngplayground/engine';
 

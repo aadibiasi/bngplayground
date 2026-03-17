@@ -19,7 +19,7 @@ export interface ProfileLikelihoodConfig {
   /** Parameters to profile */
   parameterNames: string[];
   /** Experimental data for SSR computation */
-  experimentalData: Array<{ time: number; values: Record<string, number> }>;
+  experimentalData: Array<{ time: number; values: Record<string, number>; errors?: Record<string, number> }>;
   /** Number of grid points per parameter (default: 20) */
   nGrid?: number;
   /** Range factor: grid spans [value/factor, value*factor] (default: 10) */
@@ -51,7 +51,7 @@ export interface ProfileLikelihoodResult {
 
 function computeSSR(
   simData: Array<Record<string, number>>,
-  expData: Array<{ time: number; values: Record<string, number> }>,
+  expData: Array<{ time: number; values: Record<string, number>; errors?: Record<string, number> }>,
   observables: string[],
 ): number {
   let ssr = 0;
@@ -60,7 +60,12 @@ function computeSSR(
       if (dp.values[obs] === undefined) continue;
       const simVal = interpolateValue(simData, dp.time, obs);
       const diff = simVal - dp.values[obs];
-      ssr += diff * diff;
+      const error = dp.errors?.[obs];
+      if (error !== undefined && error > 0) {
+        ssr += (diff * diff) / (error * error);
+      } else {
+        ssr += diff * diff;
+      }
     }
   }
   return ssr;

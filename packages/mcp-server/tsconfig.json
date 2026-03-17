@@ -11,13 +11,17 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": false,
     "outDir": "dist",
-    "rootDir": "src",
     "declaration": true,
     "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@grammar/*": ["../../services/grammar/*"]
+    }
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "../../services/grammar/**/*"
   ],
   "exclude": [
     "node_modules",
