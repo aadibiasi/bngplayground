@@ -10,6 +10,7 @@ import { bnglService } from './services/bnglService';
 import { exportToNet } from './services/exportNet';
 import { exportToSedML } from './services/exportSedML';
 import { exportToOMEX } from './services/exportOMEX';
+import { VSCodeAnalysisPayload } from './components/VSCodeExportModal';
 import { BNGLModel, SimulationOptions, SimulationResults, Status, ValidationWarning, EditorMarker } from './types';
 import { loadModelCode, setCachedCode, getCachedCode } from './services/modelLoader';
 import { loadModelCatalog, getModelCatalogSync, findCatalogExampleByQuery, type CatalogExample } from './services/modelCatalog';
@@ -979,6 +980,21 @@ function App() {
     }
   };
 
+  const vscodeExportPayload: VSCodeAnalysisPayload | null = code?.trim()
+    ? {
+        version: 1,
+        source: 'bng-playground',
+        modelName: loadedModelName,
+        code,
+        analyses: {
+          activeTabIndex: activeVizTab,
+          simulationOptions: simOptions ? { ...simOptions } as Record<string, unknown> : null,
+          simulationResults: results ? JSON.parse(JSON.stringify(results)) as Record<string, unknown> : null,
+          exportedAt: new Date().toISOString(),
+        },
+      }
+    : null;
+
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900 dark:bg-slate-900 dark:text-slate-100">
       {/* Export SBML handler exposed to Header and EditorPanel */}
@@ -997,6 +1013,7 @@ function App() {
         modelName={loadedModelName}
         modelId={loadedModelId}
         onModelNameChange={setLoadedModelName}
+        vscodeExportPayload={vscodeExportPayload}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
       />

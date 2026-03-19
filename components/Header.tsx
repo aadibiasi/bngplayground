@@ -10,7 +10,7 @@ import { QuestionMarkCircleIcon } from './icons/QuestionMarkCircleIcon';
 import { BookOpenIcon } from './icons/BookOpenIcon';
 import { EyeIcon } from './icons/EyeIcon';
 import { InfoIcon } from './icons/InfoIcon';
-import { VSCodeExportModal } from './VSCodeExportModal';
+import { VSCodeAnalysisPayload, VSCodeExportModal } from './VSCodeExportModal';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { UploadIcon } from './icons/UploadIcon';
 import { BioModelsImportModal } from './BioModelsImportModal';
@@ -27,6 +27,7 @@ interface HeaderProps {
   modelName?: string | null;
   modelId?: string | null;
   onModelNameChange?: (name: string | null) => void;
+  vscodeExportPayload?: VSCodeAnalysisPayload | null;
   viewMode: 'code' | 'design';
   onViewModeChange: (mode: 'code' | 'design') => void;
 }
@@ -43,6 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
   modelName,
   modelId,
   onModelNameChange,
+  vscodeExportPayload,
   viewMode,
   onViewModeChange,
 }) => {
@@ -183,6 +185,14 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                   </DropdownItem>
                 )}
+                {code && (
+                  <DropdownItem onClick={() => setIsVSCodeModalOpen(true)}>
+                    <div className="flex items-center gap-2">
+                      <DownloadIcon className="w-4 h-4 text-slate-400" />
+                      <span>Open In VS Code</span>
+                    </div>
+                  </DropdownItem>
+                )}
                 {onExportNET && (
                   <DropdownItem onClick={onExportNET}>
                     <div className="flex items-center gap-2">
@@ -217,6 +227,7 @@ export const Header: React.FC<HeaderProps> = ({
           onClose={() => setIsVSCodeModalOpen(false)}
           code={code || ''}
           modelName={modelName}
+          payload={vscodeExportPayload}
         />
         <input
           type="file"
