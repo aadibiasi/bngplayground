@@ -311,6 +311,29 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
       if (!name || !value) return;
 
+      // PyBNF / BNG2 __FREE parameter convention:
+      // A declaration like "sigma sigma__FREE" means:
+      //   - "sigma"       = initial value expression (parsed by grammar as param_name)
+      //   - "sigma__FREE" = the actual free parameter name used by PyBNF / adaptive MCMC
+      // Without this fix, sigma is registered as the parameter and sigma__FREE becomes
+      // an unresolvable expression, causing "Unknown identifier: sigma__FREE" errors.
+      if (/^[A-Za-z_][A-Za-z0-9_]*__FREE$/.test(value)) {
+        const freeName = value;   // e.g. sigma__FREE -- the correct parameter name
+        const initExpr = name;   // e.g. sigma       -- initial value (may reference other params)
+
+        // Register the __FREE parameter with the original name as its initial value expression
+        this.paramExpressions[freeName] = initExpr;
+        this.parameters[freeName] = 0;
+
+        // Also register the base name as an alias, so rates referencing "sigma" (without __FREE)
+        // still resolve correctly. Only register if it is not already defined.
+        if (!(initExpr in this.parameters) && !this.paramExpressions[initExpr]) {
+          this.paramExpressions[initExpr] = freeName;
+          this.parameters[initExpr] = 0;
+        }
+        return;
+      }
+
       // Store raw expression for resolution
       this.paramExpressions[name] = value;
       // Initialize with 0

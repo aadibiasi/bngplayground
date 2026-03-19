@@ -105,13 +105,8 @@ export class NFsimValidator {
       }
     }
 
-    // Functions are generally not supported in NFsim (except simple ones which might be inlined, but to be safe we flag them)
-    if (model.functions && model.functions.length > 0) {
-      errors.push({
-        type: ValidationErrorType.UNSUPPORTED_FUNCTION,
-        message: 'Model contains functions; NFsim compatibility is not guaranteed.'
-      });
-    }
+    // Functions are generally supported by NFsim, but we may want to warn if there are complex ones.
+    // However, since NFsim resolves most functions natively, we remove the artificial block.
 
     // Heuristic for complex models to suggest optimizations
     if (rules.length > 5 || (model.species && model.species.length > 5)) {
