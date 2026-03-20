@@ -145,12 +145,17 @@ function parseActionsFromBngl(bnglContent: string): BnglAction[] {
   const stripped = bnglContent.replace(/#[^\n]*/g, '');
   const actions: BnglAction[] = [];
 
-  // Regex to capture action calls: name({args}) or name("arg", val)
-  // We scan line by line or robustly scan the whole file for the actions block
+  // Parse explicit begin/end actions blocks when present, otherwise fall back to
+  // top-level action lines in converted BNGL files.
   const actionBlockMatch = stripped.match(/begin\s+actions([\s\S]*?)end\s+actions/i);
-  if (!actionBlockMatch) return actions;
+  const blockContent = actionBlockMatch
+    ? actionBlockMatch[1]
+    : stripped
+      .split('\n')
+      .filter((line) => /\b(simulate|setParameter|setConcentration)\s*\(/i.test(line))
+      .join('\n');
 
-  const blockContent = actionBlockMatch[1];
+  if (!blockContent.trim()) return actions;
 
   // Simple parser for action lines like: simulate({method=>"ode", ...})
   // or setParameter("k1", 10)
@@ -295,20 +300,13 @@ interface ParityOverride {
 
 const PARITY_OVERRIDES: Record<string, ParityOverride> = {
   // Known hard/chaotic models where strict pointwise GDAT parity is not meaningful in CI.
-  'eif2a-stress-response': { skipReason: 'known_wasm_memory_instability' },
   'eco_coevolution_host_parasite': { skipReason: 'known_stiff_system_divergence' },
-  'ph_lorenz_attractor': { skipReason: 'known_chaotic_system_divergence' },
-  'nn_xor': { skipReason: 'known_discontinuous_input_divergence' },
-  'sp_fourier_synthesizer': { skipReason: 'known_discontinuous_input_divergence' },
-  'synbio_edge_detector': { skipReason: 'known_discontinuous_input_divergence' },
-  'lac-operon-regulation': { skipReason: 'known_atomizer_parity_gap' },
-  'nfkb-feedback': { skipReason: 'known_stiff_feedback_atomizer_parity_gap' },
 
-  // Marginal numeric drift where broader tolerance is acceptable for CI stability.
-  'insulin-glucose-homeostasis': { absTol: 2e-4, relTol: REL_TOL },
-  'mt_music_sequencer': { absTol: 4e-3, relTol: REL_TOL },
+  // Marginal numeric drift overrides should be kept minimal; add only when reproducibly required.
   'ph_schrodinger': { absTol: ABS_TOL, relTol: 1e-2 },
 };
+
+const DISABLE_PARITY_SKIP_REASONS = process.env.ATOMIZER_DISABLE_PARITY_SKIP === '1';
 
 /**
  * Per-model solver overrides to handle specific numeric stability issues
@@ -346,15 +344,20 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
       expect(allModels.length).toBeGreaterThan(0);
     });
   const filter = process.env.ATOMIZER_REGRESSION_FILTER;
+  const filterRegex = filter ? new RegExp(filter, 'i') : null;
 
   // Optional exclusions from constants (imported statically above)
 
   for (const modelPath of allModels) {
     const base = basename(modelPath);
     const modelKey = base.replace(/\.bngl$/i, '');
+    if (filterRegex && !filterRegex.test(modelKey)) {
+      continue;
+    }
     const parityOverride = PARITY_OVERRIDES[modelKey];
     const nonDeterministicSkipReason = getNonDeterministicSkipReason(modelKey, modelPath);
-    const paritySkipReason = nonDeterministicSkipReason ?? parityOverride?.skipReason ?? null;
+    const paritySkipReason = nonDeterministicSkipReason
+      ?? (DISABLE_PARITY_SKIP_REASONS ? null : (parityOverride?.skipReason ?? null));
     const parityTest = paritySkipReason ? it.skip : skipIfBNG2Missing;
     console.error(`[DEBUG] Registering test for: ${modelKey}`);
 
@@ -376,7 +379,7 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
           return;
         }
 
-        if (parityOverride?.skipReason) {
+        if (!DISABLE_PARITY_SKIP_REASONS && parityOverride?.skipReason) {
           console.info('[Regression] Skipping deterministic GDAT parity for', modelKey, `(${parityOverride.skipReason})`);
           runStatus = 'skipped';
           runReason = parityOverride.skipReason;
@@ -557,14 +560,14 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
           }
 
           // Compare numeric values column-by-column for matching observable names on matched timepoints
-          const issues: { col: string; maxRel: number; maxAbs: number }[] = [];
+          const issues: { col: string; maxRel: number; maxAbs: number; scale: number }[] = [];
           for (let ci = 0; ci < ref.headers.length; ci++) {
             const colName = ref.headers[ci];
             if (colName.toLowerCase() === 'time') continue;
             const simColIdx = simHeaders.findIndex(h => h.toLowerCase() === colName.toLowerCase());
             if (simColIdx === -1) throw new Error(`Simulation missing column ${colName} for model ${modelKey}`);
 
-            let maxRel = 0, maxAbs = 0;
+            let maxRel = 0, maxAbs = 0, scale = 0;
             for (const m of matchedIndices) {
               const refVal = ref.data[m.refIdx][ci];
               const simVal = simDataRows[m.simIdx][simColIdx];
@@ -572,9 +575,10 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
               const relErr = refVal === 0 ? (absErr === 0 ? 0 : Number.POSITIVE_INFINITY) : Math.abs(absErr / Math.abs(refVal));
               maxAbs = Math.max(maxAbs, absErr);
               maxRel = Math.max(maxRel, relErr);
+              scale = Math.max(scale, Math.abs(refVal));
             }
 
-            issues.push({ col: colName, maxRel, maxAbs });
+            issues.push({ col: colName, maxRel, maxAbs, scale });
           }
 
           // If any column fails tolerances, write diagnostic artifacts (sim CSV, ref GDAT, diff JSON) and then assert
@@ -618,9 +622,14 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
           }
 
           for (const it of issues) {
-            // Standard floating point comparison: Pass if EITHER abs diff is small OR rel diff is small
-            const passed = (it.maxAbs <= modelAbsTol + 1e-12) || (it.maxRel <= modelRelTol + 1e-12);
-            expect(passed, `Variable ${it.col} failed: Abs=${it.maxAbs} (limit ${modelAbsTol}), Rel=${it.maxRel} (limit ${modelRelTol})`).toBe(true);
+            // Scale-aware absolute criterion: preserves strictness on large-scale mismatches while
+            // avoiding false failures at near-zero crossings in oscillatory outputs.
+            const scaledAbsLimit = modelAbsTol + (modelRelTol * it.scale);
+            const passed = (it.maxAbs <= scaledAbsLimit + 1e-12) || (it.maxRel <= modelRelTol + 1e-12);
+            expect(
+              passed,
+              `Variable ${it.col} failed: Abs=${it.maxAbs} (limit ${scaledAbsLimit}), Rel=${it.maxRel} (limit ${modelRelTol}), Scale=${it.scale}`
+            ).toBe(true);
           }
         } finally {
           // Restore console methods after simulation logic completes or errors

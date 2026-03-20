@@ -969,8 +969,20 @@ export class JITCompiler {
                     walk(node.argument);
                     bytes.push(OP_NEG);
                 } else if (node.type === 'CallExpression') {
-                    node.arguments.forEach((arg: any) => walk(arg));
                     const name = node.callee.name.toLowerCase();
+                    if (name === 'sat') {
+                        if ((node.arguments?.length ?? 0) !== 2) {
+                            throw new Error('sat() expects 2 arguments');
+                        }
+                        // sat(a,b) = a / (a + b)
+                        walk(node.arguments[0]);
+                        walk(node.arguments[0]);
+                        walk(node.arguments[1]);
+                        bytes.push(OP_ADD);
+                        bytes.push(OP_DIV);
+                        return;
+                    }
+                    node.arguments.forEach((arg: any) => walk(arg));
                     if (name === 'log' || name === 'ln') bytes.push(OP_LOG);
                     else if (name === 'exp') bytes.push(OP_EXP);
                     else if (name === 'sqrt') bytes.push(OP_SQRT);

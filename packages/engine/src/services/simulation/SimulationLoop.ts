@@ -1906,7 +1906,12 @@ export async function simulate(
       activeNativeByteCode = undefined;
       delete solverOptions.networkByteCode;
 
-      if (!(enableNativeBytecode && (requestedSolverType.startsWith('cvode') || requestedSolverType === 'auto') && !hasLocalFunctions)) {
+      const canUseNativeBytecode =
+        enableNativeBytecode &&
+        (requestedSolverType.startsWith('cvode') || requestedSolverType === 'auto') &&
+        !hasLocalFunctions;
+
+      if (!canUseNativeBytecode) {
         return;
       }
 

@@ -17,7 +17,7 @@
   - **Multi-Compartment Support (cBNGL)**: Full support for compartmentalized models with molecule transport in both ODE and stochastic solvers
 - **Visual Designer**: Construct models using a structured visual interface
 - **What-If Comparison Mode**: Run baseline vs modified-parameter simulations and compare trajectories in real-time
-- **Enhanced Example Gallery**: 250+ verified models with semantic-search powered by TensorFlow.js
+- **Enhanced Example Gallery**: 250+ verified models (fetched from RuleHub) with semantic-search powered by TensorFlow.js
 - Interactive charts (series toggle / isolate, zoom, export)
 - Analysis tabs: parameter scan, identifiability (FIM), steady state, parameter estimation, flux analysis, verification, and more
 
@@ -210,8 +210,7 @@ bionetgen-web-simulator/
 ├── tools/
 │   └── fetch-nfsim-wasm.sh   # Fetch pre-built NFsim artifacts from CI
 ├── public/
-│   ├── models/               # 250+ BNGL example models
-│   ├── model-embeddings.json # Semantic search vector index
+│   ├── model-embeddings.json # Semantic search vector index (generated from RuleHub)
 │   ├── cvode.wasm            # Pre-built CVODE solver
 │   ├── nfsim.js / nfsim.wasm # Pre-built NFsim solver
 │   └── nauty.wasm            # Pre-built Nauty canonical labeler
@@ -220,7 +219,6 @@ bionetgen-web-simulator/
 │   ├── parity_check.ts
 │   └── layered_parity_check.ts
 ├── tests/                    # Vitest formal test suite (*.spec.ts)
-└── example-models/           # Additional curated model library
 ```
 
 ### Key entry points

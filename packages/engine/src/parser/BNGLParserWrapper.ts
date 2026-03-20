@@ -334,33 +334,32 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
       // replacing those directive lines with comments.
       const lines = next.split(/\r\n|\n/);
       let seenBeginModel = false;
+      let insideAnyBlock = false;
       let rewroteTopLevelDirectives = false;
       const rewritten = lines.map(line => {
         const trimmed = line.trim();
         if (/^begin\s+model\b/i.test(trimmed)) {
           seenBeginModel = true;
+          insideAnyBlock = true;
+          return line;
+        }
+        if (/^begin\b/i.test(trimmed)) {
+          insideAnyBlock = true;
+          return line;
+        }
+        if (/^end\b/i.test(trimmed)) {
+          insideAnyBlock = false;
           return line;
         }
         
-        // If we haven't seen 'begin model' yet, be permissive.
-        // BNG2.pl allows arbitrary text before the first block unless it's a known directive.
-        // We comment out anything that doesn't look like a valid directive or block start.
-        if (!seenBeginModel && trimmed !== '') {
-          if (!/^version\s*\(/i.test(trimmed) && 
-              !/^setOption\s*\(/i.test(trimmed) &&
-              !/^begin\b/i.test(trimmed) &&
-              !/^#/.test(trimmed)) {
+        // Only rewrite truly top-level preamble text (before any begin/end block).
+        // This preserves bare-block BNGL files that intentionally omit begin/end model.
+        if (!seenBeginModel && !insideAnyBlock && trimmed !== '') {
+          if (/^version\s*\(/i.test(trimmed) || /^setOption\s*\(/i.test(trimmed)) {
             rewroteTopLevelDirectives = true;
             return `# [parser-normalized] ${line}`;
           }
-        }
-
-        if (/^setOption\s*\(/i.test(trimmed)) {
-          rewroteTopLevelDirectives = true;
-          return `# [parser-normalized] ${line}`;
-        }
-        if (!seenBeginModel) {
-          if (/^version\s*\(/i.test(trimmed) || /^setOption\s*\(/i.test(trimmed)) {
+          if (!/^#/.test(trimmed)) {
             rewroteTopLevelDirectives = true;
             return `# [parser-normalized] ${line}`;
           }

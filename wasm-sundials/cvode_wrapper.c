@@ -191,14 +191,16 @@ static void network_dydt(NetworkByteCode* bc, int neq, double* y, double* ydot) 
 
     // 2. Compute reaction rates
     for (int r = 0; r < bc->nReactions; r++) {
-        // Check for functional rate bytecode
+        // Base rate: either expression-evaluated or constant mass-action value.
+        double rate;
         if (bc->exprBytecodeOffsets && bc->exprBytecodeOffsets[r] != bc->exprBytecodeOffsets[r+1]) {
-            rates[r] = evaluate_expression(bc, r, y);
-            continue;
+            rate = evaluate_expression(bc, r, y);
+        } else {
+            rate = bc->rateConstants[r];
         }
 
-        // Mass Action (fallback)
-        double rate = bc->rateConstants[r];
+        // Apply mass-action reactant multiplication for BOTH paths.
+        // Expression rates in BNGL are rate factors that still multiply reactant terms.
         int start = bc->reactantOffsets[r];
         int end = bc->reactantOffsets[r + 1];
         

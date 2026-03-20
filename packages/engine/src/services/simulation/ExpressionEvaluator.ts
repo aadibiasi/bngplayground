@@ -6,6 +6,7 @@
  */
 
 import { getFeatureFlags, registerCacheClearCallback } from '../../featureFlags';
+import { SafeExpressionEvaluator as SafeExpressionEvaluatorStatic } from '../../utils/safeExpressionEvaluator';
 // console.log("ExpressionEvaluator module loaded");
 
 /**
@@ -175,30 +176,38 @@ function getEvaluator(override?: ExpressionEvaluator): ExpressionEvaluator | nul
   if (override) return override;
   if (SafeExpressionEvaluatorRef) return SafeExpressionEvaluatorRef;
 
+  // Prefer static module resolution first; this is robust in Vitest/TS source mode.
+  if (SafeExpressionEvaluatorStatic) {
+    SafeExpressionEvaluatorRef = SafeExpressionEvaluatorStatic;
+    return SafeExpressionEvaluatorRef;
+  }
+
   // Fallback for Node environment (used in tests / NodeJS runtime).
   // We attempt an absolute path resolution to avoid relative require issues
   // when code is executed from different directories or packaged outputs.
   if (typeof (globalThis as any).require === 'function') {
     try {
-      let modulePath = '../../utils/safeExpressionEvaluator';
+      const candidateModulePaths = ['../../utils/safeExpressionEvaluator'];
       try {
-        // Prefer a file:// URL based resolution if available (Node ESM contexts)
-        // NOTE: This will throw if import.meta is undefined (e.g., CJS).
+        // Prefer absolute file path candidates in Node ESM/CJS interop contexts.
         const { fileURLToPath } = (globalThis as any).require('url');
-        const resolved = new URL('../../utils/safeExpressionEvaluator', import.meta.url);
-        modulePath = fileURLToPath(resolved);
+        const resolvedNoExt = fileURLToPath(new URL('../../utils/safeExpressionEvaluator', import.meta.url));
+        candidateModulePaths.unshift(resolvedNoExt, `${resolvedNoExt}.js`, `${resolvedNoExt}.ts`);
       } catch {
-        // Ignore and fall back to relative path
+        // Ignore and fall back to relative path only.
       }
 
-      const mod = (globalThis as any).require(modulePath);
-
-      // Handle both ES module default export and CommonJS
-      const SafeEvaluator = mod.SafeExpressionEvaluator || mod.default?.SafeExpressionEvaluator || mod;
-
-      if (SafeEvaluator) {
-        SafeExpressionEvaluatorRef = SafeEvaluator;
-        return SafeEvaluator as unknown as ExpressionEvaluator;
+      for (const modulePath of candidateModulePaths) {
+        try {
+          const mod = (globalThis as any).require(modulePath);
+          const SafeEvaluator = mod.SafeExpressionEvaluator || mod.default?.SafeExpressionEvaluator || mod;
+          if (SafeEvaluator) {
+            SafeExpressionEvaluatorRef = SafeEvaluator;
+            return SafeEvaluator as unknown as ExpressionEvaluator;
+          }
+        } catch {
+          // Try next candidate path.
+        }
       }
     } catch (e) {
       console.warn('[ExpressionEvaluator] Failed to require SafeExpressionEvaluator in Node context', e);
@@ -213,10 +222,13 @@ function getEvaluator(override?: ExpressionEvaluator): ExpressionEvaluator | nul
  */
 export async function loadEvaluator(): Promise<void> {
   if (!SafeExpressionEvaluatorRef) {
+    if (SafeExpressionEvaluatorStatic) {
+      SafeExpressionEvaluatorRef = SafeExpressionEvaluatorStatic;
+      return;
+    }
+
     try {
-      // Dynamic import relative to THIS file
-      // file is services/simulation/ExpressionEvaluator.ts
-      // target is services/safeExpressionEvaluator.ts -> ../safeExpressionEvaluator
+      // Dynamic import remains as an extra fallback for runtime/module-boundary cases.
       const mod = await import('../../utils/safeExpressionEvaluator');
       SafeExpressionEvaluatorRef = mod.SafeExpressionEvaluator;
     } catch (e: any) {

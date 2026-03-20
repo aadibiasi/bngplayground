@@ -28,7 +28,7 @@ perl "C:\Users\Achyudhan\anaconda3\envs\Research\Lib\site-packages\bionetgen\bng
 ## Common False Assumptions (Do Not Repeat)
 
 - ❌ "BNG2 doesn't support `if()` in network generation" → It does
-- ❌ "`An_2009` is an example model" → It's in `public/models/`, not `example-models/`
+- ❌ "`An_2009` is locally in every repo" → It's now hosted on [RuleHub](https://github.com/akutuva21/rulehub) and fetched at build time.
 - ❌ "NFSim models can use ODE" → They cannot; they hang or produce wrong output
 - ❌ "`MoveConnected` should be disabled" → Read the Perl source; it's often a no-op, not a bug
 

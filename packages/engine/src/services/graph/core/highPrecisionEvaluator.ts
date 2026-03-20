@@ -275,6 +275,9 @@ class HighPrecisionVisitor extends AbstractParseTreeVisitor<Decimal> implements 
       case 'mratio':
         if (args.length !== 3) throw new Error('mratio() requires 3 arguments');
         return this.mratio(args[0], args[1], args[2]);
+      case 'sat':
+        if (args.length !== 2) throw new Error('sat() requires 2 arguments');
+        return args[0].dividedBy(args[1].plus(args[0]));
       case 'functionproduct':
         if (args.length !== 2) throw new Error('FunctionProduct() requires 2 arguments');
         return args[0].times(args[1]);

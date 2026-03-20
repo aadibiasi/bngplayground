@@ -39,7 +39,7 @@ Tests that require native binaries are automatically skipped when binaries are n
 ### Utilities
 
 - `npm run generate:gdat` - Regenerate GDAT reference fixtures
-- `npm run generate:embeddings` - Generate `public/model-embeddings.json` for semantic search
+- `npm run generate:embeddings` - Generate `public/model-embeddings.json` for semantic search (fetches from RuleHub)
 - `npm run generate:web-output` - Generate web output with Playwright
 
 ### WASM (CVODE)
@@ -174,7 +174,7 @@ The codebase uses a **monorepo structure** with core engine code in `packages/en
 - `types.ts` - Central type definitions used across the app (barrel export)
 - `components/` - React components (UI layer)
 - `services/` - **App-level services**. IMPORTANT: Files here that import from `@bngplayground/engine` are app-level wrappers or Web Worker interfaces, NOT the core algorithm implementations.
-- `public/` - Static assets, model gallery, WASM files
+- `public/` - Static assets, model embeddings, WASM files
 
 **packages/engine/ (core BioNetGen engine):**
 - `packages/engine/src/parser/` - ANTLR-based BNGL parser implementation
@@ -208,7 +208,8 @@ ruleworld-bngplayground/
 ├── src/                             # Legacy shims (do not add here)
 ├── tests/                           # Vitest test files
 ├── scripts/                         # Build-time and utility scripts
-└── public/                          # Static assets
+├── public/                          # Static assets (including model-embeddings.json)
+└── packages/
 ```
 
 ### Test File Locations
