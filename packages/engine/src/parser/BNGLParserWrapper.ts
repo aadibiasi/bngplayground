@@ -341,20 +341,34 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
           seenBeginModel = true;
           return line;
         }
+        
+        // If we haven't seen 'begin model' yet, be permissive.
+        // BNG2.pl allows arbitrary text before the first block unless it's a known directive.
+        // We comment out anything that doesn't look like a valid directive or block start.
+        if (!seenBeginModel && trimmed !== '') {
+          if (!/^version\s*\(/i.test(trimmed) && 
+              !/^setOption\s*\(/i.test(trimmed) &&
+              !/^begin\b/i.test(trimmed) &&
+              !/^#/.test(trimmed)) {
+            rewroteTopLevelDirectives = true;
+            return `# [parser-normalized] ${line}`;
+          }
+        }
+
         if (/^setOption\s*\(/i.test(trimmed)) {
           rewroteTopLevelDirectives = true;
-          return `# [parser-normalized] ${trimmed}`;
+          return `# [parser-normalized] ${line}`;
         }
         if (!seenBeginModel) {
           if (/^version\s*\(/i.test(trimmed) || /^setOption\s*\(/i.test(trimmed)) {
             rewroteTopLevelDirectives = true;
-            return `# [parser-normalized] ${trimmed}`;
+            return `# [parser-normalized] ${line}`;
           }
         }
         return line;
       });
       if (rewroteTopLevelDirectives) {
-        warnings.push('Commented top-level legacy directives before begin model (version/setOption).');
+        warnings.push('Commented top-level legacy directives or non-BNGL content before begin model.');
       }
 
       return { normalized: rewritten.join('\n'), warnings };

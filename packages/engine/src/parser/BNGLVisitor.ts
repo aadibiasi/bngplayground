@@ -318,18 +318,23 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       // Without this fix, sigma is registered as the parameter and sigma__FREE becomes
       // an unresolvable expression, causing "Unknown identifier: sigma__FREE" errors.
       if (/^[A-Za-z_][A-Za-z0-9_]*__FREE$/.test(value)) {
-        const freeName = value;   // e.g. sigma__FREE -- the correct parameter name
-        const initExpr = name;   // e.g. sigma       -- initial value (may reference other params)
+        // PyBNF / BNG2 __FREE parameter convention:
+        // A declaration like "t0 t0__FREE" means:
+        //   - "t0"           = the parameter being defined
+        //   - "t0__FREE"      = the value expression (which is just an identifier here)
+        // If the value expression is a __FREE identifier, we should ensure that:
+        // 1. "t0" depends on "t0__FREE" (normal behavior)
+        // 2. "t0__FREE" is implicitly defined as a default value (e.g. 0) to avoid "Unknown identifier" errors.
 
-        // Register the __FREE parameter with the original name as its initial value expression
-        this.paramExpressions[freeName] = initExpr;
-        this.parameters[freeName] = 0;
+        // Register the parameter as depending on the __FREE identifier
+        this.paramExpressions[name] = value;
+        this.parameters[name] = 0;
 
-        // Also register the base name as an alias, so rates referencing "sigma" (without __FREE)
-        // still resolve correctly. Only register if it is not already defined.
-        if (!(initExpr in this.parameters) && !this.paramExpressions[initExpr]) {
-          this.paramExpressions[initExpr] = freeName;
-          this.parameters[initExpr] = 0;
+        // Ensure the __FREE identifier itself is defined as a constant (defaulting to 0)
+        // if it’s not already defined elsewhere in the model.
+        if (!(value in this.parameters) && !this.paramExpressions[value]) {
+          this.parameters[value] = 0;
+          // By NOT adding it to paramExpressions, it remains a constant 0.
         }
         return;
       }
