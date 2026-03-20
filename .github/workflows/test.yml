@@ -155,7 +155,6 @@ jobs:
           BNG2_PATH: ${{ env.BNG2_PATH }}
           BNGPATH: ${{ env.BNGPATH }}
           NFSIM_PATH: ${{ env.NFSIM_PATH }}
-        continue-on-error: true
       
       - name: Upload coverage (if generated)
         if: always()

@@ -169,6 +169,13 @@ describe('Massive JIT/Bytecode Parity Test', () => {
             // HARD LIMIT: skip if network is too massive to verify quickly in this test
             if (reactions.length > 2000) return;
 
+            // This parity path uses a simplified bytecode interpreter that reads only numeric rate constants.
+            // Skip models with symbolic/expression rates until exprBytecode evaluation is added here.
+            const hasNonNumericStringRate = reactions.some(r => (
+                typeof r.rate === 'string' && !Number.isFinite(Number(r.rate.trim()))
+            ));
+            if (hasNonNumericStringRate) return;
+
             // 3. JIT Compilation
             // We map from expanded network structure to JIT expectation
             const simpleRxns = reactions.map(r => ({
@@ -176,7 +183,7 @@ describe('Massive JIT/Bytecode Parity Test', () => {
                 reactantStoich: r.reactants.map(() => 1),
                 productIndices: r.products.map(resolveSpeciesIndex),
                 productStoich: r.products.map((_, i) => (r as any).productStoich?.[i] ?? 1) as number[],
-                rateConstant: r.rate || 0,
+                rateConstant: typeof r.rate === 'string' ? Number(r.rate.trim()) : (r.rate || 0),
                 scalingVolume: (r as any).scalingVolume || 1.0
             }));
 
