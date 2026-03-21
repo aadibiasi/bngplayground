@@ -233,14 +233,14 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
             )}
           </p>
 
-          <div className="flex flex-wrap gap-2 items-end">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[7rem_minmax(0,1fr)_auto] sm:items-end">
             <Input
               value={newExprName}
               onChange={(e) => setNewExprName(e.target.value)}
               placeholder="Name"
-              className="w-24 text-sm"
+              className="w-full text-sm"
             />
-            <div className="flex-1 min-w-[120px] relative">
+            <div className="relative min-w-0">
               <Input
                 value={newExpr}
                 onChange={handleInputChange}
@@ -268,7 +268,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
                 </div>
               )}
             </div>
-            <Button onClick={addExpression} className="text-sm py-1 px-3">Add</Button>
+            <Button onClick={addExpression} className="w-full text-sm py-1 px-3 sm:w-auto">Add</Button>
           </div>
 
           {error && (

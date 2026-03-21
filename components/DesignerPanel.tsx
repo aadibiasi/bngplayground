@@ -6,7 +6,6 @@ import { BioSentence } from '../services/grammar/types';
 import { CheatsheetModal } from './CheatsheetModal';
 import { Button } from './ui/Button';
 import { BNGLModel } from '../types';
-import { HelpSection } from './HelpSection';
 import { Card } from './ui/Card';
 
 interface DesignerPanelProps {
@@ -14,6 +13,8 @@ interface DesignerPanelProps {
   onExpand?: () => void;
   text: string;
   onTextChange: (text: string) => void;
+  modelName?: string | null;
+  onModelNameChange?: (name: string | null) => void;
   onCodeChange: (code: string) => void;
   onParse: () => Promise<BNGLModel | null>;
   onSimulate: (model?: BNGLModel) => void;
@@ -45,7 +46,7 @@ Start with 20 of SHP1
 Simulate for 0.25s with 200 steps
 `;
 
-export const DesignerPanel: React.FC<DesignerPanelProps> = ({ isCollapsed, onExpand, text, onTextChange, onCodeChange, onParse, onSimulate }) => {
+export const DesignerPanel: React.FC<DesignerPanelProps> = ({ isCollapsed, onExpand, text, onTextChange, modelName, onModelNameChange, onCodeChange, onParse, onSimulate }) => {
   // Use DEFAULT_TEXT if no text provided (first time opening designer)
   const displayText = text || DEFAULT_TEXT;
   const [isCheatsheetOpen, setIsCheatsheetOpen] = useState(false);
@@ -93,6 +94,11 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({ isCollapsed, onExp
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     onTextChange(e.target.value);
+  };
+
+  const handleModelNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    onModelNameChange?.(value.trim() ? value : null);
   };
 
   if (isCollapsed) {
@@ -148,21 +154,23 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({ isCollapsed, onExp
       </div>
 
       <div className="px-4 pt-4">
-        <HelpSection
-          title="Designer Mode"
-          description="Build biological models by describing them in structured English. The tool automatically translates your sentences into precise BNGL code."
-          features={[
-            "Natural Language Input (English)",
-            "Real-time BNGL code generation",
-            "Check logic with the Parser feedback",
-            "Example 'Cheatsheet' for quick start"
-          ]}
-        />
+        <div className="mb-3">
+          <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Model Name
+          </label>
+          <input
+            type="text"
+            value={modelName ?? ''}
+            onChange={handleModelNameChange}
+            placeholder="Optional model title (for editor/export)"
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+          />
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
         {/* Main Editor Row */}
-        <div className="flex-1 flex gap-4 min-h-0">
+        <div className="flex-[1.35] flex gap-4 min-h-0">
           {/* NLP Text Editor */}
           <div className="flex-1 flex flex-col min-h-0">
             <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Natural Language Input</h3>
@@ -203,7 +211,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({ isCollapsed, onExp
         </div>
 
         {/* BNGL Preview (Monaco) */}
-        <div className="h-48 flex flex-col border-t border-slate-200 dark:border-slate-700 dark:border-slate-800 pt-2">
+        <div className="h-40 flex flex-col border-t border-slate-200 dark:border-slate-700 dark:border-slate-800 pt-3 mt-1">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Generated BNGL Code</h3>
             <span className="text-xs text-slate-400">

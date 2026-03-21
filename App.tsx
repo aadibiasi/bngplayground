@@ -141,6 +141,7 @@ function App() {
   const [viewMode, setViewMode] = useState<'code' | 'design'>('code');
   // Store designer text separately so switching modes doesn't lose content
   const [designerText, setDesignerText] = useState<string>('');
+  const [designerModelName, setDesignerModelName] = useState<string | null>(null);
 
   const parseAbortRef = useRef<AbortController | null>(null);
   const simulateAbortRef = useRef<AbortController | null>(null);
@@ -170,6 +171,19 @@ function App() {
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   }, []);
+
+  const handleDesignerModelNameChange = useCallback((name: string | null) => {
+    setDesignerModelName(name);
+    setLoadedModelName(name);
+  }, []);
+
+  const handleViewModeChange = useCallback((mode: 'code' | 'design') => {
+    setViewMode(mode);
+    if (mode === 'design') {
+      setLoadedModelId(null);
+      setLoadedModelName(designerModelName);
+    }
+  }, [designerModelName]);
 
   const handleMouseUp = useCallback(() => {
     isResizingRef.current = false;
@@ -1015,7 +1029,7 @@ function App() {
         onModelNameChange={setLoadedModelName}
         vscodeExportPayload={vscodeExportPayload}
         viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        onViewModeChange={handleViewModeChange}
       />
 
 
@@ -1073,6 +1087,8 @@ function App() {
                     onExpand={() => setSplitPosition(35)}
                     text={designerText}
                     onTextChange={setDesignerText}
+                    modelName={designerModelName}
+                    onModelNameChange={handleDesignerModelNameChange}
                     onCodeChange={handleEditorCodeChange}
                     onParse={handleParse}
                     onSimulate={(modelOverride) => handleSimulate({
