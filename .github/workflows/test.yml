@@ -219,6 +219,18 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Build application
+        run: npm run build
+
+      - name: Generate web output via Playwright
+        run: npm run generate:web-output
+        env:
+          NODE_ENV: test
+          RULEHUB_ROOT: ${{ github.workspace }}/RuleHub
+
       - name: Run reference validation suite
         run: npm run test:reference
         env:

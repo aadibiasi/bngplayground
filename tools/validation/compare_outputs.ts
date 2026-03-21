@@ -896,12 +896,12 @@ function getMultiPhaseReference(
 
     if (!fs.existsSync(WEB_OUTPUT_DIR)) {
       console.error(`Web output directory not found: ${WEB_OUTPUT_DIR}`);
-      return;
+      process.exit(1);
     }
 
     if (!fs.existsSync(BNG_OUTPUT_DIR)) {
       console.error(`BNG output directory not found: ${BNG_OUTPUT_DIR}`);
-      return;
+      process.exit(1);
     }
 
     const allCsvFiles = fs.readdirSync(WEB_OUTPUT_DIR).filter(f => f.toLowerCase().endsWith('.csv'));
