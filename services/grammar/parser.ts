@@ -8,88 +8,29 @@ import {
     SimulationSentence,
     ActionType
 } from './types';
+import { buildVerbPattern, VERBS_BY_ACTION } from './ontology';
+import { validateInteractionSentence } from './validator';
 
 // ============================================================================
 // SYNONYM MAPS - Makes the parser more "LLM-like" by accepting many phrasings
 // ============================================================================
 
-const BINDING_VERBS = [
-    'binds', 'binds to', 'interacts with', 'associates with', 'complexes with',
-    'attaches to', 'joins', 'connects to', 'docks to', 'recruits',
-    'forms complex with', 'forms a complex with', 'binds with'
-];
-
-const PHOSPHORYLATION_VERBS = [
-    'phosphorylates', 'phosphorylate', 'adds phosphate to', 'kinases'
-];
-
-const DEPHOSPHORYLATION_VERBS = [
-    'dephosphorylates', 'dephosphorylate', 'removes phosphate from', 'phosphatases'
-];
-
-const SYNTHESIS_VERBS = [
-    'synthesizes', 'synthesize', 'produces', 'creates', 'generates', 'makes',
-    'transcribes', 'translates', 'expresses'
-];
-
-const DEGRADATION_VERBS = [
-    'degrades', 'degrade', 'destroys', 'breaks down', 'eliminates', 'removes',
-    'proteases', 'digests'
-];
-
-const DIMERIZATION_VERBS = [
-    'dimerizes', 'dimerize', 'dimerizes with', 'forms dimer with', 'homodimerizes',
-    'heterodimerizes with', 'oligomerizes', 'multimerizes'
-];
-
-const TRANSLOCATION_VERBS = [
-    'translocates to', 'translocate to', 'moves to', 'enters', 'exits',
-    'traffics to', 'localizes to', 'shuttles to', 'is transported to',
-    'is secreted from', 'is released from'
-];
-
-const ACTIVATION_VERBS = [
-    'activates', 'activate', 'turns on', 'enables', 'stimulates', 'promotes',
-    'upregulates', 'enhances', 'potentiates', 'induces'
-];
-
-const INHIBITION_VERBS = [
-    'inhibits', 'inhibit', 'blocks', 'suppresses', 'represses', 'prevents',
-    'downregulates', 'attenuates', 'antagonizes', 'inactivates'
-];
-
-const CLEAVAGE_VERBS = [
-    'cleaves', 'cleave', 'cuts', 'splits', 'processes', 'proteolyzes'
-];
-
-const UBIQUITINATION_VERBS = [
-    'ubiquitinates', 'ubiquitinate', 'ubiquitylates', 'adds ubiquitin to', 'tags for degradation'
-];
-
-const DEUBIQUITINATION_VERBS = [
-    'deubiquitinates', 'deubiquitinate', 'removes ubiquitin from'
-];
-
-const METHYLATION_VERBS = [
-    'methylates', 'methylate', 'adds methyl to', 'adds methyl group to'
-];
-
-const DEMETHYLATION_VERBS = [
-    'demethylates', 'demethylate', 'removes methyl from'
-];
-
-const ACETYLATION_VERBS = [
-    'acetylates', 'acetylate', 'adds acetyl to'
-];
-
-const DEACETYLATION_VERBS = [
-    'deacetylates', 'deacetylate', 'removes acetyl from'
-];
-
-// Build combined pattern for all verbs
-function buildVerbPattern(verbs: string[]): string {
-    return verbs.map(v => v.replace(/\s+/g, '\\s+')).join('|');
-}
+const BINDING_VERBS = VERBS_BY_ACTION.binds;
+const PHOSPHORYLATION_VERBS = VERBS_BY_ACTION.phosphorylates;
+const DEPHOSPHORYLATION_VERBS = VERBS_BY_ACTION.dephosphorylates;
+const SYNTHESIS_VERBS = VERBS_BY_ACTION.synthesizes;
+const DEGRADATION_VERBS = VERBS_BY_ACTION.degrades;
+const DIMERIZATION_VERBS = VERBS_BY_ACTION.dimerizes;
+const TRANSLOCATION_VERBS = VERBS_BY_ACTION.translocates;
+const ACTIVATION_VERBS = VERBS_BY_ACTION.activates;
+const INHIBITION_VERBS = VERBS_BY_ACTION.inhibits;
+const CLEAVAGE_VERBS = VERBS_BY_ACTION.cleaves;
+const UBIQUITINATION_VERBS = VERBS_BY_ACTION.ubiquitinates;
+const DEUBIQUITINATION_VERBS = VERBS_BY_ACTION.deubiquitinates;
+const METHYLATION_VERBS = VERBS_BY_ACTION.methylates;
+const DEMETHYLATION_VERBS = VERBS_BY_ACTION.demethylates;
+const ACETYLATION_VERBS = VERBS_BY_ACTION.acetylates;
+const DEACETYLATION_VERBS = VERBS_BY_ACTION.deacetylates;
 
 // ============================================================================
 // SMART PATTERNS with flexible verb recognition
@@ -299,7 +240,22 @@ export class BioParser {
         // Try all interaction types with flexible verb matching
         const interaction = this.tryParseInteraction(text);
         if (interaction) {
-            return interaction;
+            const validation = validateInteractionSentence(interaction);
+            if (validation.isValid) {
+                return interaction;
+            }
+
+            return {
+                id: uuidv4(),
+                text,
+                type: 'INVALID',
+                isValid: false,
+                error: {
+                    message: `Invalid interaction: ${validation.errors.join('; ')}`,
+                    startColumn: 0,
+                    endColumn: text.length,
+                },
+            };
         }
 
         // Try Initialization

@@ -1,74 +1,12 @@
 import { BioSentence, InteractionSentence, DefinitionSentence, InitializationSentence, SimulationSentence } from './types';
-
-// Maps action types to the site/state modifications they require
-const ACTION_SITE_CONFIG: Record<string, { site: string, states: string[], modFrom: string, modTo: string }> = {
-  phosphorylates: { site: 'y', states: ['u', 'p'], modFrom: 'u', modTo: 'p' },
-  dephosphorylates: { site: 'y', states: ['u', 'p'], modFrom: 'p', modTo: 'u' },
-  ubiquitinates: { site: 'ub', states: ['n', 'u'], modFrom: 'n', modTo: 'u' },
-  deubiquitinates: { site: 'ub', states: ['n', 'u'], modFrom: 'u', modTo: 'n' },
-  methylates: { site: 'me', states: ['n', 'm'], modFrom: 'n', modTo: 'm' },
-  demethylates: { site: 'me', states: ['n', 'm'], modFrom: 'm', modTo: 'n' },
-  acetylates: { site: 'ac', states: ['n', 'a'], modFrom: 'n', modTo: 'a' },
-  deacetylates: { site: 'ac', states: ['n', 'a'], modFrom: 'a', modTo: 'n' },
-  activates: { site: 'act', states: ['i', 'a'], modFrom: 'i', modTo: 'a' },
-  inhibits: { site: 'act', states: ['i', 'a'], modFrom: 'a', modTo: 'i' },
-  cleaves: { site: 'cl', states: ['i', 'c'], modFrom: 'i', modTo: 'c' },
-};
-
-const DEFAULT_PARAMETER_VALUES: Record<string, number> = {
-  k_on: 0.1,
-  k_off: 0.01,
-  k_cat: 1.0,
-  k_dephos: 0.5,
-  k_syn: 0.1,
-  k_deg: 0.01,
-  k_dim: 0.1,
-  k_undim: 0.01,
-  k_trans: 0.1,
-  k_act: 1.0,
-  k_inhib: 1.0,
-  k_cleave: 0.5,
-  k_ubiq: 0.5,
-  k_deubiq: 0.5,
-  k_meth: 0.5,
-  k_demeth: 0.5,
-  k_acet: 0.5,
-  k_deacet: 0.5,
-  k_fwd: 1.0,
-  k_rev: 0.1,
-};
+import {
+  ACTION_SITE_CONFIG,
+  DEFAULT_PARAMETER_VALUES,
+  defaultForwardRate,
+  defaultReverseRate,
+} from './ontology';
 
 const isNumericToken = (value: string): boolean => /^[0-9.e-]+$/i.test(value);
-
-function defaultForwardRate(action: string): string {
-  switch (action) {
-    case 'binds': return 'k_on';
-    case 'phosphorylates': return 'k_cat';
-    case 'dephosphorylates': return 'k_dephos';
-    case 'synthesizes': return 'k_syn';
-    case 'degrades': return 'k_deg';
-    case 'dimerizes': return 'k_dim';
-    case 'translocates': return 'k_trans';
-    case 'activates': return 'k_act';
-    case 'inhibits': return 'k_inhib';
-    case 'cleaves': return 'k_cleave';
-    case 'ubiquitinates': return 'k_ubiq';
-    case 'deubiquitinates': return 'k_deubiq';
-    case 'methylates': return 'k_meth';
-    case 'demethylates': return 'k_demeth';
-    case 'acetylates': return 'k_acet';
-    case 'deacetylates': return 'k_deacet';
-    default: return 'k_fwd';
-  }
-}
-
-function defaultReverseRate(action: string): string {
-  switch (action) {
-    case 'binds': return 'k_off';
-    case 'dimerizes': return 'k_undim';
-    default: return 'k_rev';
-  }
-}
 
 export class BNGLGenerator {
   static generate(sentences: BioSentence[]): string {
