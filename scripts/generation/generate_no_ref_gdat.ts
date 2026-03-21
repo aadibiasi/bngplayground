@@ -318,11 +318,7 @@ function main() {
 		process.exitCode = 2;
 		return;
 	}
-	if (!fs.existsSync(BNG_TEST_OUTPUT_DIR)) {
-		console.error('Missing bng_test_output directory:', BNG_TEST_OUTPUT_DIR);
-		process.exitCode = 2;
-		return;
-	}
+	ensureDir(BNG_TEST_OUTPUT_DIR);
 
 	console.log('Generating missing BNG2 references for NOREF models...');
 	console.log('BNG2_PL:', BNG2_PL);
