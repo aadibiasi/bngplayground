@@ -171,6 +171,35 @@ async function waitForPageToSettleAfterNavigation(page, timeoutMs = 120_000) {
   await page.waitForFunction(() => typeof window.runModels === 'function', null, { timeout: timeoutMs });
 }
 
+async function getAvailableModels(page, timeoutMs = 120_000) {
+  await page.waitForFunction(
+    async () => {
+      if (typeof window.getModelEntriesAsync === 'function') {
+        const entries = await window.getModelEntriesAsync();
+        return Array.isArray(entries) && entries.length > 0;
+      }
+      if (typeof window.getModelEntries === 'function') {
+        const entries = window.getModelEntries();
+        return Array.isArray(entries) && entries.length > 0;
+      }
+      if (typeof window.getModelNames === 'function') {
+        const names = window.getModelNames();
+        return Array.isArray(names) && names.length > 0;
+      }
+      return false;
+    },
+    null,
+    { timeout: timeoutMs }
+  );
+
+  return page.evaluate(async () => {
+    if (typeof window.getModelEntriesAsync === 'function') return window.getModelEntriesAsync();
+    if (typeof window.getModelEntries === 'function') return window.getModelEntries();
+    const names = (typeof window.getModelNames === 'function' ? window.getModelNames() : []) || [];
+    return names.map((name) => ({ id: name, name }));
+  });
+}
+
 async function applyBatchSeed(page) {
   if (!Number.isFinite(WEB_OUTPUT_SEED)) return;
   await page.evaluate((seed) => {
@@ -328,11 +357,7 @@ async function main() {
     await initializeBatchPage(page);
 
     // Get full list of models from the app
-    const allModels = await page.evaluate(() => {
-      if (typeof window.getModelEntries === 'function') return window.getModelEntries();
-      const names = (typeof window.getModelNames === 'function' ? window.getModelNames() : []) || [];
-      return names.map((name) => ({ id: name, name }));
-    });
+    const allModels = await getAvailableModels(page);
 
     const modelsToRun = envModelList ? resolveModelList(envModelList, allModels) : allModels.map(m => m.id);
     console.log(`[generate:web-output] Found ${allModels.length} available models.`);

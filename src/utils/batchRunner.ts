@@ -110,6 +110,12 @@ export function getModelEntries() {
     return all.map(m => ({ id: m.id || m.name, name: m.name }));
 }
 
+export async function getModelEntriesAsync() {
+    const catalog = await loadModelCatalog();
+    const all = catalog.examples ?? [];
+    return all.map(m => ({ id: m.id || m.name, name: m.name }));
+}
+
 export function getModelNames() {
     return getModelEntries().map(m => m.name);
 }
@@ -142,5 +148,6 @@ if (typeof window !== 'undefined') {
     (window as any).runAllModels = runAllModels;
     (window as any).runNfSimModels = runNfSimModels;
     (window as any).getModelEntries = getModelEntries;
+    (window as any).getModelEntriesAsync = getModelEntriesAsync;
     (window as any).getModelNames = getModelNames;
 }
