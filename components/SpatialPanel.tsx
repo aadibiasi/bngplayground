@@ -20,18 +20,17 @@ import { DEFAULT_SPATIAL_CONFIG } from '@bngplayground/engine';
 interface SpatialPanelProps {
   /** Current BNGL model text from the editor */
   bnglText: string;
-  /** Panel width and height */
-  width: number;
-  height: number;
 }
 
-export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText, width, height }) => {
+export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText }) => {
   const [state, setState] = useState<SpatialSimulationState>('idle');
   const [snapshot, setSnapshot] = useState<SpatialSnapshot | null>(null);
   const [result, setResult] = useState<SpatialSimulationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [geometries, setGeometries] = useState<CompartmentGeometry[]>([]);
   const [speciesNames, setSpeciesNames] = useState<Map<number, string>>(new Map());
+  const [viewerSize, setViewerSize] = useState({ width: 800, height: 600 });
 
   // Configuration state
   const [config, setConfig] = useState<Partial<SpatialSimulationConfig>>({
@@ -42,24 +41,55 @@ export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText, width, hei
   });
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const viewerHeight = height - 100; // Reserve space for controls
+  const tEndRef = useRef<HTMLInputElement>(null);
+  const dtRef = useRef<HTMLInputElement>(null);
+  const controlsHeight = 48;
+
+  // Resize observer for responsive viewer
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setViewerSize({
+        width: entry.contentRect.width,
+        height: Math.max(200, entry.contentRect.height - controlsHeight),
+      });
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   const handleRun = useCallback(async () => {
     setError(null);
+    setValidationError(null);
     setResult(null);
     setSnapshot(null);
 
-    await spatialService.init(bnglText, config, {
+    const tEndRaw = parseFloat(tEndRef.current?.value ?? '');
+    const dtRaw = parseFloat(dtRef.current?.value ?? '');
+    const tEnd = !isNaN(tEndRaw) ? tEndRaw : DEFAULT_SPATIAL_CONFIG.tEnd;
+    const dt = !isNaN(dtRaw) ? dtRaw : DEFAULT_SPATIAL_CONFIG.dt;
+
+    // Validation
+    const errors: string[] = [];
+    if (dt <= 0) errors.push('dt must be positive');
+    if (tEnd <= 0) errors.push('t_end must be positive');
+    if (dt > tEnd) errors.push(`dt (${dt}) cannot exceed t_end (${tEnd})`);
+    if (errors.length > 0) {
+      setValidationError(errors.join('; '));
+      return;
+    }
+
+    const runConfig = { ...config, tEnd, dt };
+
+    await spatialService.init(bnglText, runConfig, {
       onStateChange: (s) => setState(s),
+      onInitialized: ({ geometries, speciesNames }) => {
+        setGeometries(geometries);
+        setSpeciesNames(new Map(Object.entries(speciesNames).map(([k, v]) => [parseInt(k), v])));
+      },
       onSnapshot: (snap) => setSnapshot(snap),
       onComplete: (res) => {
         setResult(res);
-        // Extract species names from the final result
-        const names = new Map<number, string>();
-        for (const [name] of Object.entries(res.finalSpeciesCounts)) {
-          names.set(names.size, name);
-        }
-        setSpeciesNames(names);
       },
       onError: (msg) => {
         setError(msg);
@@ -105,8 +135,8 @@ export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText, width, hei
             t_end:
             <input
               type="text"
-              value={config.tEnd ?? DEFAULT_SPATIAL_CONFIG.tEnd}
-              onChange={(e) => setConfig(c => ({ ...c, tEnd: parseFloat(e.target.value) || DEFAULT_SPATIAL_CONFIG.tEnd }))}
+              ref={tEndRef}
+              defaultValue={DEFAULT_SPATIAL_CONFIG.tEnd}
               className="w-20 ml-1 px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-gray-200"
               disabled={isRunning}
             />
@@ -115,8 +145,8 @@ export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText, width, hei
             dt:
             <input
               type="text"
-              value={config.dt ?? DEFAULT_SPATIAL_CONFIG.dt}
-              onChange={(e) => setConfig(c => ({ ...c, dt: parseFloat(e.target.value) || DEFAULT_SPATIAL_CONFIG.dt }))}
+              ref={dtRef}
+              defaultValue={DEFAULT_SPATIAL_CONFIG.dt}
               className="w-20 ml-1 px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-gray-200"
               disabled={isRunning}
             />
@@ -132,6 +162,13 @@ export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText, width, hei
             />
           </label>
         </div>
+
+        {/* Validation error */}
+        {validationError && (
+          <div className="ml-4 text-xs text-red-400 font-mono truncate" title={validationError}>
+            {validationError}
+          </div>
+        )}
 
         {/* Status badges */}
         <div className="ml-auto flex items-center gap-2 text-xs">
@@ -162,7 +199,7 @@ export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText, width, hei
               <div className="text-lg font-medium">Spatial Simulation</div>
               <div className="text-sm max-w-sm">
                 Run a particle-based spatial simulation of your BNGL model.
-                Molecules diffuse in 3D and react upon collision using libBNG reaction resolution.
+                Molecules diffuse in 3D and react upon collision using rule-based reaction resolution.
               </div>
               <button
                 onClick={handleRun}
@@ -177,8 +214,8 @@ export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText, width, hei
             snapshot={snapshot}
             geometries={geometries}
             speciesNames={speciesNames}
-            width={width}
-            height={viewerHeight}
+            width={viewerSize.width}
+            height={viewerSize.height}
             isRunning={isRunning}
           />
         )}

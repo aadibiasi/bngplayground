@@ -705,14 +705,14 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               description="Simulate your model in a 3D volume using particle-based Monte Carlo. Molecules diffuse, interact with compartment boundaries, and react upon collision."
               features={[
                 "3D particle visualization (Three.js)",
-                "libBNG reaction resolution (WASM)",
+                "Rule-based reaction resolution (ANTLR4)",
                 "Auto-generated compartment geometry",
                 "Brownian dynamics (MCell4-compatible)"
               ]}
               plotDescription="Dots represent individual molecule instances. The simulation handles spatial exclusion and diffusion-limited reactions."
             />
             <div className="flex-1 min-h-0">
-              <SpatialPanel bnglText={bnglCode || ''} width={800} height={600} />
+              <SpatialPanel bnglText={bnglCode || ''} />
             </div>
           </div>
         )}

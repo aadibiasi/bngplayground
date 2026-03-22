@@ -63,7 +63,7 @@
     "react-markdown": "^10.1.0",
     "recharts": "^3.3.0",
     "remark-gfm": "^4.0.1",
-    "three": "file:three-0.172.0.tgz",
+    "three": "^0.172.0",
     "umap-js": "^1.4.0"
   },
   "devDependencies": {

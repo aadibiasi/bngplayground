@@ -4,9 +4,6 @@
  * Barrel export for the spatial simulation module.
  */
 
-export { loadLibBNG, initLibBNG, destroyLibBNG, getSpecies, getCompartments, getParameter, resolveBimolReaction, PATHWAY_INDEX_NO_RXN } from './LibBNGLoader';
-export type { LibBNGModule } from './LibBNGLoader';
-
 export { SpatialSimulation } from './SpatialSimulation';
 
 export { autoGenerateGeometry, generateIcosphere } from './SpatialGeometry';

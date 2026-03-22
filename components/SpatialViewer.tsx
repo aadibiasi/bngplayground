@@ -296,7 +296,9 @@ export const SpatialViewer: React.FC<SpatialViewerProps> = ({
       </div>
 
       {/* Species legend */}
-      <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm rounded-lg px-3 py-2 text-xs font-mono text-gray-300 max-h-40 overflow-y-auto pointer-events-none">
+      <div className="absolute bottom-3 left-3 bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2 text-xs font-mono text-gray-300 max-h-48 overflow-y-auto"
+        style={{ scrollbarWidth: 'thin', scrollbarColor: '#374151 transparent' }}>
+        <div className="text-primary-400 mb-1.5 text-[10px] uppercase tracking-wider">Species</div>
         {Array.from(speciesNames.entries()).map(([id, name]) => (
           <div key={id} className="flex items-center gap-1.5 py-0.5">
             <div
@@ -305,7 +307,16 @@ export const SpatialViewer: React.FC<SpatialViewerProps> = ({
                 backgroundColor: `#${SPECIES_COLORS[id % SPECIES_COLORS.length].toString(16).padStart(6, '0')}`,
               }}
             />
-            <span className="truncate max-w-[120px]" title={name}>
+            <span
+              style={{
+                maxWidth: 180,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                display: 'inline-block',
+              }}
+              title={name}
+            >
               {name}
             </span>
           </div>

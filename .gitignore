@@ -229,4 +229,7 @@ output/
 AGENTS-COLLECTION/
 wasm-sundials_deps/
 
+# Local npm tarballs
+three-*.tgz
+
 # End of .gitignore

@@ -7,7 +7,7 @@
  */
 
 import { SpatialSimulation } from '@bngplayground/engine';
-import type { SpatialSimulationConfig, SpatialSnapshot, SpatialSimulationResult } from '@bngplayground/engine';
+import type { SpatialSimulationConfig, SpatialSnapshot, SpatialSimulationResult, CompartmentGeometry } from '@bngplayground/engine';
 
 /** Messages from main thread → worker */
 export type SpatialWorkerRequest =
@@ -18,7 +18,7 @@ export type SpatialWorkerRequest =
 
 /** Messages from worker → main thread */
 export type SpatialWorkerResponse =
-  | { type: 'initialized'; speciesCount: number; compartmentCount: number }
+  | { type: 'initialized'; geometries: import('@bngplayground/engine').CompartmentGeometry[]; speciesNames: Record<number, string> }
   | { type: 'snapshot'; snapshot: SpatialSnapshot }
   | { type: 'progress'; step: number; totalSteps: number; time: number }
   | { type: 'complete'; result: SpatialSimulationResult }
@@ -36,10 +36,17 @@ self.onmessage = async (event: MessageEvent<SpatialWorkerRequest>) => {
         simulation = new SpatialSimulation(msg.config);
         await simulation.initialize(msg.bnglText);
 
+        const geometries = simulation.getGeometries();
+        const speciesNamesMap = simulation.getSpeciesNames();
+        const speciesNames: Record<number, string> = {};
+        for (const [id, name] of speciesNamesMap) {
+          speciesNames[id] = name;
+        }
+
         const response: SpatialWorkerResponse = {
           type: 'initialized',
-          speciesCount: 0, // Will be populated after init
-          compartmentCount: 0,
+          geometries,
+          speciesNames,
         };
         self.postMessage(response);
         break;

@@ -5,13 +5,14 @@
  * Pattern: services/bnglService.ts
  */
 
-import type { SpatialSimulationConfig, SpatialSnapshot, SpatialSimulationResult } from '@bngplayground/engine';
+import type { SpatialSimulationConfig, SpatialSnapshot, SpatialSimulationResult, CompartmentGeometry } from '@bngplayground/engine';
 import type { SpatialWorkerRequest, SpatialWorkerResponse } from './spatialWorker';
 
 export type SpatialSimulationState = 'idle' | 'initializing' | 'running' | 'complete' | 'error';
 
 export interface SpatialServiceCallbacks {
   onStateChange?: (state: SpatialSimulationState) => void;
+  onInitialized?: (data: { geometries: CompartmentGeometry[]; speciesNames: Record<number, string> }) => void;
   onSnapshot?: (snapshot: SpatialSnapshot) => void;
   onProgress?: (step: number, totalSteps: number, time: number) => void;
   onComplete?: (result: SpatialSimulationResult) => void;
@@ -120,7 +121,7 @@ class SpatialService {
   private handleWorkerMessage(msg: SpatialWorkerResponse): void {
     switch (msg.type) {
       case 'initialized':
-        // Ready to run
+        this.callbacks.onInitialized?.({ geometries: msg.geometries, speciesNames: msg.speciesNames });
         this.run();
         break;
 
