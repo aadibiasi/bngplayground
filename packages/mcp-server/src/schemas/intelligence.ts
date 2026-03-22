@@ -6,11 +6,46 @@ const composeSeedSpeciesSchema = z.object({
     count: finiteNumber,
 }).strict();
 
+const indraQuerySchema = z.object({
+    subject: z.string().min(1).optional(),
+    object: z.string().min(1).optional(),
+    type: z.string().min(1).optional(),
+    minEvidence: finiteNumber.optional(),
+    minBelief: finiteNumber.optional(),
+}).strict();
+
 export const composeModelArgsSchema = z.object({
-    statements: z.array(z.string().min(1)).min(1),
+    statements: z.array(z.string().min(1)).min(1).optional(),
     parameters: z.record(finiteNumber).optional(),
     seed_species: z.array(composeSeedSpeciesSchema).optional(),
-}).strict();
+    strict: z.boolean().optional(),
+    source: z.enum(['grammar', 'indra_nlp', 'indra_db']).optional(),
+    indra_text: z.string().min(1).optional(),
+    indra_query: indraQuerySchema.optional(),
+}).strict().superRefine((value, ctx) => {
+    const source = value.source ?? 'grammar';
+    if (source === 'grammar' && (!value.statements || value.statements.length === 0)) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: '`statements` is required when source is `grammar`.',
+            path: ['statements'],
+        });
+    }
+    if (source === 'indra_nlp' && !value.indra_text) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: '`indra_text` is required when source is `indra_nlp`.',
+            path: ['indra_text'],
+        });
+    }
+    if (source === 'indra_db' && !value.indra_query) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: '`indra_query` is required when source is `indra_db`.',
+            path: ['indra_query'],
+        });
+    }
+});
 
 const editOperationSchema = z.discriminatedUnion('action', [
     z.object({ action: z.literal('add_rule'), rule: z.string() }).strict(),

@@ -28,6 +28,20 @@ export default defineConfig(() => {
           followRedirects: true,
           rewrite: (path: string) => path.replace(/^\/api\/biomodels/, ''),
           secure: false
+        },
+        '/api/indra': {
+          target: 'http://api.indra.bio:8000',
+          changeOrigin: true,
+          followRedirects: true,
+          rewrite: (path: string) => path.replace(/^\/api\/indra/, ''),
+          secure: false
+        },
+        '/api/indra-db': {
+          target: 'https://db.indra.bio',
+          changeOrigin: true,
+          followRedirects: true,
+          rewrite: (path: string) => path.replace(/^\/api\/indra-db/, ''),
+          secure: false
         }
       }
     },
