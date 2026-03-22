@@ -19,7 +19,7 @@ import { MODEL_CATEGORIES } from '../../constants.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../');
-const DEFAULT_RULEHUB_MANIFEST_URL = process.env.VITE_RULEHUB_MANIFEST_URL || 'https://raw.githubusercontent.com/akutuva21/rulehub/master/manifest.json';
+const DEFAULT_RULEHUB_MANIFEST_URL = process.env.VITE_RULEHUB_MANIFEST_URL || 'https://raw.githubusercontent.com/ruleworld/rulehub/master/manifest.json';
 
 // Initialize the embedding model (runs locally, no API needed)
 // Using all-MiniLM-L6-v2: small (22MB), fast, good quality

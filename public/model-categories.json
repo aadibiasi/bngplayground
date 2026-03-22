@@ -1,0 +1,915 @@
+{
+  "generatedAt": "2026-03-22T01:55:34.980Z",
+  "source": "constants.ts::MODEL_CATEGORIES",
+  "categories": [
+    {
+      "id": "cancer",
+      "name": "Cancer Biology",
+      "count": 10
+    },
+    {
+      "id": "immunology",
+      "name": "Immunology",
+      "count": 21
+    },
+    {
+      "id": "neuroscience",
+      "name": "Neuroscience",
+      "count": 11
+    },
+    {
+      "id": "cell-cycle",
+      "name": "Cell Cycle & Death",
+      "count": 11
+    },
+    {
+      "id": "metabolism",
+      "name": "Metabolism",
+      "count": 12
+    },
+    {
+      "id": "developmental",
+      "name": "Developmental Biology",
+      "count": 11
+    },
+    {
+      "id": "ecology",
+      "name": "Ecology & Evolution",
+      "count": 7
+    },
+    {
+      "id": "physics",
+      "name": "Mathematics & Physics",
+      "count": 7
+    },
+    {
+      "id": "cs",
+      "name": "Computer Science & Algorithms",
+      "count": 12
+    },
+    {
+      "id": "ml-signal",
+      "name": "Machine Learning & Signal Processing",
+      "count": 9
+    },
+    {
+      "id": "synbio",
+      "name": "Synthetic Biology",
+      "count": 7
+    },
+    {
+      "id": "published-models",
+      "name": "Published Models",
+      "count": 45
+    },
+    {
+      "id": "multistage",
+      "name": "Multistage",
+      "count": 21
+    },
+    {
+      "id": "tutorials",
+      "name": "Tutorials & Simple Examples",
+      "count": 2
+    },
+    {
+      "id": "native-tutorials",
+      "name": "RuleWorld Tutorials",
+      "count": 28
+    },
+    {
+      "id": "test-models",
+      "name": "Example Models",
+      "count": 175
+    }
+  ],
+  "modelToCategories": {
+    "Rule_based_egfr_tutorial": [
+      "Cancer Biology",
+      "Published Models"
+    ],
+    "checkpoint-kinase-signaling": [
+      "Cancer Biology",
+      "Example Models"
+    ],
+    "dna-damage-repair": [
+      "Cancer Biology",
+      "Example Models"
+    ],
+    "egfr-signaling-pathway": [
+      "Cancer Biology",
+      "Example Models"
+    ],
+    "glioblastoma-egfrviii-signaling": [
+      "Cancer Biology",
+      "Example Models"
+    ],
+    "hypoxia-response-signaling": [
+      "Cancer Biology",
+      "Example Models"
+    ],
+    "mapk-signaling-cascade": [
+      "Cancer Biology",
+      "Multistage",
+      "Example Models"
+    ],
+    "p38-mapk-signaling": [
+      "Cancer Biology",
+      "Example Models"
+    ],
+    "ras-gef-gap-cycle": [
+      "Cancer Biology",
+      "Example Models"
+    ],
+    "vegf-angiogenesis": [
+      "Cancer Biology",
+      "Example Models"
+    ],
+    "An_2009": [
+      "Immunology",
+      "Published Models"
+    ],
+    "BaruaBCR_2012": [
+      "Immunology",
+      "Published Models"
+    ],
+    "Cheemalavagu_JAK_STAT": [
+      "Immunology",
+      "Published Models"
+    ],
+    "ChylekTCR_2014": [
+      "Immunology",
+      "Published Models"
+    ],
+    "Jaruszewicz-Blonska_2023": [
+      "Immunology",
+      "Published Models"
+    ],
+    "innate_immunity": [
+      "Immunology",
+      "Published Models"
+    ],
+    "Lin_TCR_2019": [
+      "Immunology",
+      "Published Models"
+    ],
+    "Mukhopadhyay_2013": [
+      "Immunology",
+      "Published Models"
+    ],
+    "degranulation_model": [
+      "Immunology",
+      "Published Models"
+    ],
+    "bcr-signaling": [
+      "Immunology",
+      "Example Models"
+    ],
+    "blood-coagulation-thrombin": [
+      "Immunology",
+      "Example Models"
+    ],
+    "cd40-signaling": [
+      "Immunology",
+      "Example Models"
+    ],
+    "complement-activation-cascade": [
+      "Immunology",
+      "Example Models"
+    ],
+    "immune-synapse-formation": [
+      "Immunology",
+      "Example Models"
+    ],
+    "inflammasome-activation": [
+      "Immunology",
+      "Example Models"
+    ],
+    "interferon-signaling": [
+      "Immunology",
+      "Multistage",
+      "Example Models"
+    ],
+    "jak-stat-cytokine-signaling": [
+      "Immunology",
+      "Example Models"
+    ],
+    "platelet-activation": [
+      "Immunology",
+      "Example Models"
+    ],
+    "t-cell-activation": [
+      "Immunology",
+      "Example Models"
+    ],
+    "tlr3-dsrna-sensing": [
+      "Immunology",
+      "Example Models"
+    ],
+    "viral-sensing-innate-immunity": [
+      "Immunology",
+      "Example Models"
+    ],
+    "Lin_Prion_2019": [
+      "Neuroscience",
+      "Published Models"
+    ],
+    "Lisman": [
+      "Neuroscience",
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "ampk-signaling": [
+      "Neuroscience",
+      "Example Models"
+    ],
+    "beta-adrenergic-response": [
+      "Neuroscience",
+      "Multistage",
+      "Example Models"
+    ],
+    "calcineurin-nfat-pathway": [
+      "Neuroscience",
+      "Multistage",
+      "Example Models"
+    ],
+    "calcium-spike-signaling": [
+      "Neuroscience",
+      "Multistage",
+      "Example Models"
+    ],
+    "inositol-phosphate-metabolism": [
+      "Neuroscience",
+      "Multistage",
+      "Example Models"
+    ],
+    "l-type-calcium-channel-dynamics": [
+      "Neuroscience",
+      "Multistage",
+      "Example Models"
+    ],
+    "mtor-signaling": [
+      "Neuroscience",
+      "Example Models"
+    ],
+    "neurotransmitter-release": [
+      "Neuroscience",
+      "Example Models"
+    ],
+    "synaptic-plasticity-ltp": [
+      "Neuroscience",
+      "Multistage",
+      "Example Models"
+    ],
+    "Lang_2024": [
+      "Cell Cycle & Death",
+      "Published Models",
+      "Multistage"
+    ],
+    "Repressilator": [
+      "Cell Cycle & Death",
+      "Synthetic Biology",
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "apoptosis-cascade": [
+      "Cell Cycle & Death",
+      "Example Models"
+    ],
+    "caspase-activation-loop": [
+      "Cell Cycle & Death",
+      "Example Models"
+    ],
+    "cell-cycle-checkpoint": [
+      "Cell Cycle & Death",
+      "Example Models"
+    ],
+    "clock-bmal1-gene-circuit": [
+      "Cell Cycle & Death",
+      "Example Models"
+    ],
+    "dr5-apoptosis-signaling": [
+      "Cell Cycle & Death",
+      "Example Models"
+    ],
+    "e2f-rb-cell-cycle-switch": [
+      "Cell Cycle & Death",
+      "Multistage",
+      "Example Models"
+    ],
+    "p53-mdm2-oscillator": [
+      "Cell Cycle & Death",
+      "Example Models"
+    ],
+    "parp1-mediated-dna-repair": [
+      "Cell Cycle & Death",
+      "Example Models"
+    ],
+    "tnf-induced-apoptosis": [
+      "Cell Cycle & Death",
+      "Example Models"
+    ],
+    "ABC": [
+      "Metabolism",
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "ABp": [
+      "Metabolism",
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "GK": [
+      "Metabolism",
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "allosteric-activation": [
+      "Metabolism",
+      "Example Models"
+    ],
+    "auto-activation-loop": [
+      "Metabolism",
+      "Multistage",
+      "Example Models"
+    ],
+    "autophagy-regulation": [
+      "Metabolism",
+      "Multistage",
+      "Example Models"
+    ],
+    "competitive-enzyme-inhibition": [
+      "Metabolism",
+      "Example Models"
+    ],
+    "glycolysis-branch-point": [
+      "Metabolism",
+      "Example Models"
+    ],
+    "insulin-glucose-homeostasis": [
+      "Metabolism",
+      "Example Models"
+    ],
+    "lac-operon-regulation": [
+      "Metabolism",
+      "Multistage",
+      "Example Models"
+    ],
+    "michaelis-menten-kinetics": [
+      "Metabolism",
+      "Example Models"
+    ],
+    "no-cgmp-signaling": [
+      "Metabolism",
+      "Example Models"
+    ],
+    "Massole_2023": [
+      "Developmental Biology",
+      "Published Models"
+    ],
+    "bmp-signaling": [
+      "Developmental Biology",
+      "Example Models"
+    ],
+    "fgf-signaling-pathway": [
+      "Developmental Biology",
+      "Example Models"
+    ],
+    "hedgehog-signaling-pathway": [
+      "Developmental Biology",
+      "Example Models"
+    ],
+    "myogenic-differentiation": [
+      "Developmental Biology",
+      "Example Models"
+    ],
+    "notch-delta-lateral-inhibition": [
+      "Developmental Biology",
+      "Example Models"
+    ],
+    "rankl-rank-signaling": [
+      "Developmental Biology",
+      "Example Models"
+    ],
+    "retinoic-acid-signaling": [
+      "Developmental Biology",
+      "Example Models"
+    ],
+    "smad-tgf-beta-signaling": [
+      "Developmental Biology",
+      "Example Models"
+    ],
+    "sonic-hedgehog-gradient": [
+      "Developmental Biology",
+      "Multistage",
+      "Example Models"
+    ],
+    "wnt-beta-catenin-signaling": [
+      "Developmental Biology",
+      "Example Models"
+    ],
+    "eco_coevolution_host_parasite": [
+      "Ecology & Evolution",
+      "Example Models"
+    ],
+    "eco_food_web_chaos_3sp": [
+      "Ecology & Evolution",
+      "Example Models"
+    ],
+    "eco_lotka_volterra_grid": [
+      "Ecology & Evolution",
+      "Example Models"
+    ],
+    "eco_mutualism_obligate": [
+      "Ecology & Evolution",
+      "Example Models"
+    ],
+    "eco_rock_paper_scissors_spatial": [
+      "Ecology & Evolution",
+      "Example Models"
+    ],
+    "sir-epidemic-model": [
+      "Ecology & Evolution",
+      "Published Models",
+      "Tutorials & Simple Examples",
+      "Example Models"
+    ],
+    "wacky_zombie_infection": [
+      "Ecology & Evolution",
+      "Example Models"
+    ],
+    "brusselator-oscillator": [
+      "Mathematics & Physics",
+      "Multistage",
+      "Example Models"
+    ],
+    "ph_lorenz_attractor": [
+      "Mathematics & Physics",
+      "Example Models"
+    ],
+    "ph_nbody_gravity": [
+      "Mathematics & Physics",
+      "Example Models"
+    ],
+    "ph_schrodinger": [
+      "Mathematics & Physics",
+      "Example Models"
+    ],
+    "wacky_bouncing_ball": [
+      "Mathematics & Physics",
+      "Example Models"
+    ],
+    "wacky_traffic_jam_asep": [
+      "Mathematics & Physics",
+      "Example Models"
+    ],
+    "ph_wave_equation": [
+      "Mathematics & Physics",
+      "Example Models"
+    ],
+    "mt_arithmetic_compiler": [
+      "Computer Science & Algorithms",
+      "Example Models"
+    ],
+    "mt_bngl_interpreter": [
+      "Computer Science & Algorithms",
+      "Example Models"
+    ],
+    "cs_diffie_hellman": [
+      "Computer Science & Algorithms",
+      "Example Models"
+    ],
+    "cs_hash_function": [
+      "Computer Science & Algorithms",
+      "Example Models"
+    ],
+    "cs_huffman": [
+      "Computer Science & Algorithms",
+      "Example Models"
+    ],
+    "cs_monte_carlo_pi": [
+      "Computer Science & Algorithms",
+      "Example Models"
+    ],
+    "mt_music_sequencer": [
+      "Computer Science & Algorithms",
+      "Example Models"
+    ],
+    "cs_pagerank": [
+      "Computer Science & Algorithms",
+      "Example Models"
+    ],
+    "mt_pascal_triangle": [
+      "Computer Science & Algorithms",
+      "Example Models"
+    ],
+    "cs_pid_controller": [
+      "Computer Science & Algorithms",
+      "Example Models"
+    ],
+    "mt_quine": [
+      "Computer Science & Algorithms",
+      "Example Models"
+    ],
+    "cs_regex_nfa": [
+      "Computer Science & Algorithms",
+      "Example Models"
+    ],
+    "ml_gradient_descent": [
+      "Machine Learning & Signal Processing",
+      "Example Models"
+    ],
+    "ml_hopfield": [
+      "Machine Learning & Signal Processing",
+      "Example Models"
+    ],
+    "ml_kmeans": [
+      "Machine Learning & Signal Processing",
+      "Example Models"
+    ],
+    "ml_q_learning": [
+      "Machine Learning & Signal Processing",
+      "Example Models"
+    ],
+    "sp_fourier_synthesizer": [
+      "Machine Learning & Signal Processing",
+      "Example Models"
+    ],
+    "sp_image_convolution": [
+      "Machine Learning & Signal Processing",
+      "Example Models"
+    ],
+    "sp_kalman_filter": [
+      "Machine Learning & Signal Processing",
+      "Example Models"
+    ],
+    "ml_svm": [
+      "Machine Learning & Signal Processing",
+      "Example Models"
+    ],
+    "nn_xor": [
+      "Machine Learning & Signal Processing",
+      "Example Models"
+    ],
+    "synbio_band_pass_filter": [
+      "Synthetic Biology",
+      "Example Models"
+    ],
+    "synbio_counter_molecular": [
+      "Synthetic Biology",
+      "Example Models"
+    ],
+    "synbio_edge_detector": [
+      "Synthetic Biology",
+      "Example Models"
+    ],
+    "synbio_logic_gates_enzymatic": [
+      "Synthetic Biology",
+      "Example Models"
+    ],
+    "synbio_oscillator_synchronization": [
+      "Synthetic Biology",
+      "Example Models"
+    ],
+    "wacky_alchemy_stone": [
+      "Synthetic Biology",
+      "Example Models"
+    ],
+    "AB": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "ABC_ssa": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "ABp_approx": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "BAB": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "BAB_coop": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "birth-death": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "cBNGL_simple": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "Chylek_library": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "ComplexDegradation": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "Creamer_2012": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "Dushek_2011": [
+      "Published Models"
+    ],
+    "Dushek_2014": [
+      "Published Models"
+    ],
+    "egfr_simple": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "Lin_ERK_2019": [
+      "Published Models"
+    ],
+    "LR": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "LR_comp": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "LRR": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "LRR_comp": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "LV": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "LV_comp": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "organelle_transport": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "organelle_transport_struct": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "quasi_equilibrium": [
+      "Published Models",
+      "Tutorials & Simple Examples",
+      "RuleWorld Tutorials"
+    ],
+    "SIR": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "Suderman_2013": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "visualize": [
+      "Published Models",
+      "RuleWorld Tutorials"
+    ],
+    "bistable-toggle-switch": [
+      "Multistage",
+      "Example Models"
+    ],
+    "contact-inhibition-hippo-yap": [
+      "Multistage",
+      "Example Models"
+    ],
+    "eif2a-stress-response": [
+      "Multistage",
+      "Example Models"
+    ],
+    "hematopoietic-growth-factor": [
+      "Multistage",
+      "Example Models"
+    ],
+    "hif1a_degradation_loop": [
+      "Multistage",
+      "Example Models"
+    ],
+    "nfkb-feedback": [
+      "Multistage",
+      "Example Models"
+    ],
+    "nfsim_aggregation_gelation": [
+      "Example Models"
+    ],
+    "akt-signaling": [
+      "Example Models"
+    ],
+    "energy_allostery_mwc": [
+      "Example Models"
+    ],
+    "energy_catalysis_mm": [
+      "Example Models"
+    ],
+    "chemotaxis-signal-transduction": [
+      "Example Models"
+    ],
+    "circadian-oscillator": [
+      "Example Models"
+    ],
+    "nfsim_coarse_graining": [
+      "Example Models"
+    ],
+    "compartment_endocytosis": [
+      "Example Models"
+    ],
+    "compartment_membrane_bound": [
+      "Example Models"
+    ],
+    "compartment_nested_transport": [
+      "Example Models"
+    ],
+    "compartment_nuclear_transport": [
+      "Example Models"
+    ],
+    "compartment_organelle_exchange": [
+      "Example Models"
+    ],
+    "cooperative-binding": [
+      "Example Models"
+    ],
+    "energy_cooperativity_adh": [
+      "Example Models"
+    ],
+    "dna-methylation-dynamics": [
+      "Example Models"
+    ],
+    "dual-site-phosphorylation": [
+      "Example Models"
+    ],
+    "nfsim_dynamic_compartments": [
+      "Example Models"
+    ],
+    "endosomal-sorting-rab": [
+      "Example Models"
+    ],
+    "er-stress-response": [
+      "Example Models"
+    ],
+    "erk-nuclear-translocation": [
+      "Example Models"
+    ],
+    "feature_functional_rates_volume": [
+      "Example Models"
+    ],
+    "gas6-axl-signaling": [
+      "Example Models"
+    ],
+    "gene-expression-toggle": [
+      "Example Models"
+    ],
+    "genetic_bistability_energy": [
+      "Example Models"
+    ],
+    "genetic_dna_replication_stochastic": [
+      "Example Models"
+    ],
+    "genetic_goodwin_oscillator": [
+      "Example Models"
+    ],
+    "genetic_translation_kinetics": [
+      "Example Models"
+    ],
+    "genetic_turing_pattern_1d": [
+      "Example Models"
+    ],
+    "feature_global_functions_scan": [
+      "Example Models"
+    ],
+    "gm_game_of_life": [
+      "Example Models"
+    ],
+    "gm_ray_marcher": [
+      "Example Models"
+    ],
+    "gpcr-desensitization-arrestin": [
+      "Example Models"
+    ],
+    "nfsim_hybrid_particle_field": [
+      "Example Models"
+    ],
+    "il1b-signaling": [
+      "Example Models"
+    ],
+    "il6-jak-stat-pathway": [
+      "Example Models"
+    ],
+    "ire1a-xbp1-er-stress": [
+      "Example Models"
+    ],
+    "jnk-mapk-signaling": [
+      "Example Models"
+    ],
+    "kir-channel-regulation": [
+      "Example Models"
+    ],
+    "energy_linear_chain": [
+      "Example Models"
+    ],
+    "lipid-mediated-pip3-signaling": [
+      "Example Models"
+    ],
+    "feature_local_functions_explicit": [
+      "Example Models"
+    ],
+    "meta_formal_game_theory": [
+      "Example Models"
+    ],
+    "meta_formal_molecular_clock": [
+      "Example Models"
+    ],
+    "meta_formal_petri_net": [
+      "Example Models"
+    ],
+    "mtorc2-signaling": [
+      "Example Models"
+    ],
+    "negative-feedback-loop": [
+      "Example Models"
+    ],
+    "oxidative-stress-response": [
+      "Example Models"
+    ],
+    "phosphorelay-chain": [
+      "Example Models"
+    ],
+    "predator-prey-dynamics": [
+      "Example Models"
+    ],
+    "process_actin_treadmilling": [
+      "Example Models"
+    ],
+    "process_autophagy_flux": [
+      "Example Models"
+    ],
+    "process_cell_adhesion_strength": [
+      "Example Models"
+    ],
+    "process_kinetic_proofreading_tcr": [
+      "Example Models"
+    ],
+    "process_quorum_sensing_switch": [
+      "Example Models"
+    ],
+    "quorum-sensing-circuit": [
+      "Example Models"
+    ],
+    "rab-gtpase-cycle": [
+      "Example Models"
+    ],
+    "repressilator-oscillator": [
+      "Example Models"
+    ],
+    "rho-gtpase-actin-cytoskeleton": [
+      "Example Models"
+    ],
+    "nfsim_ring_closure_polymer": [
+      "Example Models"
+    ],
+    "shp2-phosphatase-regulation": [
+      "Example Models"
+    ],
+    "signal-amplification-cascade": [
+      "Example Models"
+    ],
+    "simple-dimerization": [
+      "Example Models"
+    ],
+    "stat3-mediated-transcription": [
+      "Example Models"
+    ],
+    "stress-response-adaptation": [
+      "Example Models"
+    ],
+    "feature_symmetry_factors_cyclic": [
+      "Example Models"
+    ],
+    "feature_synthesis_degradation_ss": [
+      "Example Models"
+    ],
+    "energy_transport_pump": [
+      "Example Models"
+    ],
+    "two-component-system": [
+      "Example Models"
+    ],
+    "wacky_black_hole": [
+      "Example Models"
+    ],
+    "wound-healing-pdgf-signaling": [
+      "Example Models"
+    ]
+  }
+}

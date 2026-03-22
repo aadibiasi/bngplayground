@@ -45,8 +45,8 @@ const pendingFetches = new Map<string, Promise<string>>();
 let manifestCache: ModelManifest | null = null;
 let manifestPromise: Promise<ModelManifest> | null = null;
 let manifestSourceUrl: string | null = null;
-const DEFAULT_RULEHUB_MANIFEST_URL = 'https://raw.githubusercontent.com/akutuva21/rulehub/master/manifest.json';
-const DEFAULT_RULEHUB_CDN_MANIFEST_URL = 'https://cdn.jsdelivr.net/gh/akutuva21/rulehub@master/manifest.json';
+const DEFAULT_RULEHUB_MANIFEST_URL = 'https://raw.githubusercontent.com/ruleworld/rulehub/master/manifest.json';
+const DEFAULT_RULEHUB_CDN_MANIFEST_URL = 'https://cdn.jsdelivr.net/gh/ruleworld/rulehub@master/manifest.json';
 
 // ── Base URL detection ─────────────────────────────────────────────
 

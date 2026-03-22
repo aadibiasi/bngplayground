@@ -108,6 +108,8 @@
         let hoveredIdx = -1, selectedIdx = -1, lockedIdx = -1;
         let animationFrame;
         let activeFilters = new Set();
+        let categoryCounts = new Map();
+        let categoryOrder = [];
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const tooltip = document.getElementById('tooltip');
@@ -134,12 +136,99 @@
             return sims.sort((a, b) => b.sim - a.sim).slice(0, topN).map(s => s.idx);
         }
 
+        const CANONICAL_CATEGORIES = new Set([
+            'Published Models',
+            'Example Models',
+            'Validation',
+            'Tutorials',
+            'RuleWorld Tutorials',
+            'Contributed Models',
+            'PyBioNetGen',
+            'Immunology',
+            'Metabolism',
+            'Neuroscience',
+            'Cell Cycle & Death',
+            'Developmental Biology',
+            'Cancer Biology',
+            'Machine Learning & Signal Processing',
+            'Mathematics & Physics',
+            'Ecology & Evolution',
+            'Synthetic Biology',
+            'Multistage',
+            'Epidemiology',
+            'Covid-19',
+            'Other'
+        ]);
+
+        const CATEGORY_ALIASES = {
+            'published models': 'Published Models',
+            'example models': 'Example Models',
+            'validation': 'Validation',
+            'tutorial': 'Tutorials',
+            'tutorials': 'Tutorials',
+            'ruleworld tutorials': 'RuleWorld Tutorials',
+            'immunology': 'Immunology',
+            'metabolism': 'Metabolism',
+            'neuroscience': 'Neuroscience',
+            'cell cycle & death': 'Cell Cycle & Death',
+            'developmental biology': 'Developmental Biology',
+            'cancer biology': 'Cancer Biology',
+            'machine learning & signal processing': 'Machine Learning & Signal Processing',
+            'mathematics & physics': 'Mathematics & Physics',
+            'ecology & evolution': 'Ecology & Evolution',
+            'synthetic biology': 'Synthetic Biology',
+            'multistage': 'Multistage',
+            'epidemiology': 'Epidemiology',
+            'covid-19': 'Covid-19',
+            'covid19': 'Covid-19'
+        };
+
+        function normalizeCategory(rawCategory, pathValue) {
+            const normalized = String(rawCategory || '').trim().toLowerCase();
+            if (normalized && CATEGORY_ALIASES[normalized]) {
+                return CATEGORY_ALIASES[normalized];
+            }
+
+            const root = String(pathValue || '').split('/')[0].toLowerCase();
+            if (root === 'published') return 'Published Models';
+            if (root === 'contributed') return 'Contributed Models';
+            if (root === 'tutorials') return 'Tutorials';
+            if (root === 'pybionetgen') return 'PyBioNetGen';
+
+            if (rawCategory && CANONICAL_CATEGORIES.has(rawCategory)) {
+                return rawCategory;
+            }
+            return 'Other';
+        }
+
+        function getModelLookupKeys(m) {
+            const keys = [];
+            const id = String(m.id || '').trim();
+            if (id) keys.push(id.toLowerCase());
+
+            const filename = String(m.filename || '').trim();
+            if (filename) {
+                keys.push(filename.toLowerCase());
+                keys.push(filename.replace(/\.bngl$/i, '').toLowerCase());
+            }
+
+            const pathValue = String(m.path || '').trim();
+            if (pathValue) {
+                const base = pathValue.split('/').pop() || pathValue;
+                keys.push(base.toLowerCase());
+                keys.push(base.replace(/\.bngl$/i, '').toLowerCase());
+            }
+
+            return [...new Set(keys.filter(Boolean))];
+        }
+
         async function init() {
             document.getElementById('status').textContent = 'Loading models...';
             
-            // Fetch embeddings and RuleHub manifest in parallel
-            // This ensures we always use the latest canonical categories from RuleHub (the "Source of Truth")
-            const manifestUrl = 'https://raw.githubusercontent.com/akutuva21/rulehub/master/manifest.json';
+            // Fetch embeddings and RuleHub manifest in parallel.
+            // We use manifest data for display names when available, but keep
+            // local category/tag metadata as the source of truth for filtering.
+            const manifestUrl = 'https://raw.githubusercontent.com/ruleworld/rulehub/master/manifest.json';
             
             let json, manifestMap = new Map();
             try {
@@ -164,26 +253,14 @@
             
             models = Object.values(json.models || json).map(m => {
                 const entry = manifestMap.get(m.id);
-                // Source of truth for category: RuleHub manifest > Embedded data > Fallback
-                let category = entry?.category || m.category || (m.tags && m.tags[0]) || 'Other';
-                
-                // Prettify RuleHub categories if they match common patterns
-                const categoryPuts = {
-                    'tutorial': 'Tutorials',
-                    'signaling': 'Signaling',
-                    'metabolism': 'Metabolism',
-                    'epidemiology': 'Epidemiology',
-                    'validation': 'Validation',
-                    'synthetic': 'Synthetic Biology'
-                };
-                if (categoryPuts[category.toLowerCase()]) category = categoryPuts[category.toLowerCase()];
-                else if (category.length > 0) {
-                    // Capitalize first letter if it's a simple string
-                    category = category.charAt(0).toUpperCase() + category.slice(1);
-                }
+                // Source of truth for category/tags: embedded metadata > manifest > fallback.
+                const rawCategory = m.category || (m.tags && m.tags[0]) || entry?.category || 'Other';
+                const category = normalizeCategory(rawCategory, m.path || m.filename || entry?.path || '');
 
-                // Ensure category is the FIRST tag for consistent coloring
-                let tags = entry?.tags || m.tags || [category];
+                // Keep local tags first so legend/filtering matches curated app metadata.
+                let tags = (Array.isArray(m.tags) && m.tags.length > 0)
+                    ? m.tags
+                    : ((Array.isArray(entry?.tags) && entry.tags.length > 0) ? entry.tags : [category]);
                 tags = [category, ...tags.filter(t => t !== category)];
                 
                 return {
@@ -192,7 +269,8 @@
                     pos2D: m.umap2D || [Math.random() * 10, Math.random() * 10],
                     pos3D: m.umap3D || [Math.random() * 10, Math.random() * 10, Math.random() * 10],
                     tags: tags,
-                    category: category
+                    category: category,
+                    categories: [category]
                 };
             });
 
@@ -208,14 +286,82 @@
                 console.warn('UMAP: visible-models.json not available, showing all models');
             }
 
+            // Optionally enrich with constants-derived category memberships.
+            // This supports overlapping categories (one model can belong to many).
+            try {
+                const cresp = await fetch('./model-categories.json');
+                if (cresp.ok) {
+                    const cjson = await cresp.json();
+                    const modelToCategories = new Map(
+                        Object.entries(cjson.modelToCategories || {}).map(([k, v]) => [
+                            String(k).toLowerCase(),
+                            Array.isArray(v) ? [...new Set(v.map(x => String(x).trim()).filter(Boolean))] : []
+                        ])
+                    );
+
+                    categoryOrder = Array.isArray(cjson.categories)
+                        ? cjson.categories.map(c => String(c?.name || '').trim()).filter(Boolean)
+                        : [];
+
+                    models = models.map((m) => {
+                        const keys = getModelLookupKeys(m);
+                        const categories = keys
+                            .map((k) => modelToCategories.get(k))
+                            .find((v) => Array.isArray(v) && v.length > 0) || [];
+
+                        if (categories.length === 0) {
+                            return m;
+                        }
+
+                        const primary = categories[0];
+                        return {
+                            ...m,
+                            category: primary,
+                            categories,
+                            tags: [...new Set([primary, ...(m.tags || [])])]
+                        };
+                    });
+                }
+            } catch (e) {
+                console.warn('UMAP: model-categories.json not available, using embedding categories only');
+            }
+
             document.getElementById('count').textContent = models.length;
 
-            // Build color map from all unique tags
-            const allTags = [...new Set(models.flatMap(m => m.tags))];
-            allTags.forEach((tag, i) => colorMap[tag] = colors[i % colors.length]);
+            // Build overlap-aware category counts.
+            categoryCounts = models.reduce((acc, m) => {
+                const membership = categoryOrder.length > 0
+                    ? ((Array.isArray(m.categories) && m.categories.length > 0) ? [...new Set(m.categories)] : [])
+                    : ((Array.isArray(m.categories) && m.categories.length > 0)
+                        ? [...new Set(m.categories)]
+                        : [m.category || m.tags?.[0] || 'Other']);
+                membership.forEach((key) => {
+                    if (!key) return;
+                    acc.set(key, (acc.get(key) || 0) + 1);
+                });
+                return acc;
+            }, new Map());
+
+            let categories = [...categoryCounts.entries()]
+                .sort((a, b) => b[1] - a[1])
+                .map(([category]) => category);
+
+            if (categoryOrder.length > 0) {
+                const ordered = categoryOrder.filter((name) => categoryCounts.has(name));
+                categories = ordered;
+            }
+
+            categories.forEach((category, i) => {
+                colorMap[category] = colors[i % colors.length];
+            });
             
-            // Assign primary color (first tag)
-            models.forEach(m => m.color = colorMap[m.tags[0]] || '#94a3b8');
+            // Assign node color from primary category.
+            models.forEach(m => {
+                const key = (Array.isArray(m.categories) && m.categories.length > 0)
+                    ? m.categories[0]
+                    : (categoryOrder.length > 0 ? null : (m.category || m.tags?.[0] || 'Other'));
+                m.color = colorMap[key] || '#94a3b8';
+            });
 
             if (!hasPrecomputed) {
                 document.getElementById('status').textContent = 'Computing layout...';
@@ -284,11 +430,26 @@
             const w = canvas.clientWidth, h = canvas.clientHeight;
             ctx.clearRect(0, 0, w, h);
 
+            // Reset per-frame screen cache so hidden nodes are never hit-testable.
+            models.forEach((m) => {
+                m._screenX = undefined;
+                m._screenY = undefined;
+                m._radius = undefined;
+                m._visible = false;
+            });
+
             const search = document.getElementById('search').value.toLowerCase();
             let filtered = models;
             
             if (activeFilters.size > 0) {
-                filtered = models.filter(m => m.tags.some(t => activeFilters.has(t)));
+                filtered = models.filter(m => {
+                    const membership = categoryOrder.length > 0
+                        ? ((Array.isArray(m.categories) && m.categories.length > 0) ? m.categories : [])
+                        : ((Array.isArray(m.categories) && m.categories.length > 0)
+                            ? m.categories
+                            : [m.category || m.tags?.[0] || 'Other']);
+                    return membership.some((c) => activeFilters.has(c));
+                });
             }
             
             if (search) {
@@ -298,6 +459,12 @@
                     (m.observables || []).some(o => o.toLowerCase().includes(search))
                 );
             }
+
+            // Drop stale hover/lock states when a model is filtered out.
+            if (hoveredIdx >= 0 && !filtered.includes(models[hoveredIdx])) hoveredIdx = -1;
+            if (lockedIdx >= 0 && !filtered.includes(models[lockedIdx])) lockedIdx = -1;
+            if (selectedIdx >= 0 && !filtered.includes(models[selectedIdx])) selectedIdx = -1;
+            if (hoveredIdx < 0) tooltip.style.display = 'none';
 
             const positions = filtered.map(m => mode === '3d' ? project3D(m.pos3D) : m.pos2D);
             if (positions.length === 0) return;
@@ -371,6 +538,7 @@
                 m._screenX = x;
                 m._screenY = y;
                 m._radius = r;
+                m._visible = true;
             });
 
             document.getElementById('info').textContent = `${mode.toUpperCase()} • ${filtered.length} models • Zoom: ${zoom.toFixed(1)}x`;
@@ -385,9 +553,11 @@
         function renderLegend() {
             const legend = document.getElementById('legend');
             legend.style.display = 'flex';
-            legend.innerHTML = Object.entries(colorMap).map(([tag, color]) => 
-                `<div class="legend-item" data-tag="${tag}"><div class="legend-dot" style="background:${color};color:${color}"></div><div class="legend-label">${tag}</div></div>`
-            ).join('');
+            const sorted = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
+            legend.innerHTML = sorted.map(([category, count]) => {
+                const color = colorMap[category] || '#94a3b8';
+                return `<div class="legend-item" data-tag="${category}"><div class="legend-dot" style="background:${color};color:${color}"></div><div class="legend-label">${category} (${count})</div></div>`;
+            }).join('');
             legend.querySelectorAll('.legend-item').forEach(el => {
                 el.onclick = () => { 
                     const tag = el.dataset.tag;
@@ -454,7 +624,7 @@
             hoveredIdx = -1;
             for (let i = models.length - 1; i >= 0; i--) {
                 const m = models[i];
-                if (m._screenX === undefined) continue;
+                if (!m._visible || m._screenX === undefined) continue;
                 const dx = mx - m._screenX, dy = my - m._screenY;
                 if (dx * dx + dy * dy < (m._radius + 4) * (m._radius + 4)) {
                     hoveredIdx = i;
@@ -464,7 +634,7 @@
             if (hoveredIdx >= 0) {
                 const m = models[hoveredIdx];
                 tooltip.style.display = 'block';
-                const tagBadges = m.tags.map(t => `<span class="tooltip-tag" style="background:${colorMap[t]}">${t}</span>`).join('');
+                const tagBadges = m.tags.map(t => `<span class="tooltip-tag" style="background:${colorMap[t] || '#64748b'}">${t}</span>`).join('');
                 const obs = m.observables && m.observables.length > 0 
                     ? m.observables.slice(0, 8).join(', ') + (m.observables.length > 8 ? ` (+${m.observables.length - 8})` : '')
                     : 'None';

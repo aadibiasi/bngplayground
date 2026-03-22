@@ -29,7 +29,7 @@ jobs:
       - name: Checkout RuleHub
         uses: actions/checkout@v6
         with:
-          repository: akutuva21/RuleHub
+          repository: ruleworld/rulehub
           path: RuleHub
       
       - name: Setup Node.js
@@ -67,7 +67,7 @@ jobs:
       - name: Checkout RuleHub
         uses: actions/checkout@v6
         with:
-          repository: akutuva21/RuleHub
+          repository: ruleworld/rulehub
           path: RuleHub
       
       - name: Setup Node.js
@@ -115,7 +115,7 @@ jobs:
       - name: Checkout RuleHub
         uses: actions/checkout@v6
         with:
-          repository: akutuva21/RuleHub
+          repository: ruleworld/rulehub
           path: RuleHub
 
       - name: Setup Python
@@ -202,7 +202,7 @@ jobs:
       - name: Checkout RuleHub
         uses: actions/checkout@v6
         with:
-          repository: akutuva21/RuleHub
+          repository: ruleworld/rulehub
           path: RuleHub
 
       - name: Setup Python
@@ -306,7 +306,7 @@ jobs:
       - name: Checkout RuleHub
         uses: actions/checkout@v6
         with:
-          repository: akutuva21/RuleHub
+          repository: ruleworld/rulehub
           path: RuleHub
 
       - name: Setup Python
