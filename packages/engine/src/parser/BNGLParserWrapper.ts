@@ -335,26 +335,29 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
       const lines = next.split(/\r\n|\n/);
       let seenBeginModel = false;
       let insideAnyBlock = false;
+      let seenAnyBlock = false;
       let rewroteTopLevelDirectives = false;
       const rewritten = lines.map(line => {
         const trimmed = line.trim();
         if (/^begin\s+model\b/i.test(trimmed)) {
           seenBeginModel = true;
           insideAnyBlock = true;
+          seenAnyBlock = true;
           return line;
         }
         if (/^begin\b/i.test(trimmed)) {
           insideAnyBlock = true;
+          seenAnyBlock = true;
           return line;
         }
         if (/^end\b/i.test(trimmed)) {
           insideAnyBlock = false;
           return line;
         }
-        
+
         // Only rewrite truly top-level preamble text (before any begin/end block).
         // This preserves bare-block BNGL files that intentionally omit begin/end model.
-        if (!seenBeginModel && !insideAnyBlock && trimmed !== '') {
+        if (!seenBeginModel && !seenAnyBlock && trimmed !== '') {
           if (/^version\s*\(/i.test(trimmed) || /^setOption\s*\(/i.test(trimmed)) {
             rewroteTopLevelDirectives = true;
             return `# [parser-normalized] ${line}`;

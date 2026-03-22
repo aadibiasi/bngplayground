@@ -13,7 +13,7 @@ describe('contact map cytoscape styles', () => {
     const parentRule = styles.find((s: any) => s.selector === 'node[type = "molecule"]:parent');
     expect(parentRule).toBeDefined();
     expect(parentRule.style['text-valign']).toBe('top');
-    expect(parentRule.style['text-margin-y']).toBe(18);
+    expect(parentRule.style['text-margin-y']).toBe(20);
 
     const molRule = styles.find((s: any) => s.selector === 'node[type = "molecule"]');
     expect(molRule).toBeDefined();
