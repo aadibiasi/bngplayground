@@ -76,6 +76,9 @@ const DB_STATEMENT_TYPES = [
   'Autophosphorylation',
 ];
 
+const INDRA_DOCS_URL = 'https://indra.readthedocs.io/en/latest/rest_api.html';
+const INDRA_API_URL = 'https://api.indra.bio/';
+
 function statementBadgeText(statement: ReviewableStatement): string {
   const belief = typeof statement.statement.belief === 'number'
     ? `, ${statement.statement.belief.toFixed(2)} belief`
@@ -109,6 +112,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
   const displayText = text || DEFAULT_TEXT;
   const [activeTab, setActiveTab] = useState<DesignerTab>('grammar');
   const [isCheatsheetOpen, setIsCheatsheetOpen] = useState(false);
+  const [isIndraGuideOpen, setIsIndraGuideOpen] = useState(false);
   const [indraAvailable, setIndraAvailable] = useState<boolean | null>(null);
   const [checkingIndraAvailability, setCheckingIndraAvailability] = useState(false);
 
@@ -246,6 +250,9 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
         policy: currentAssemblyPolicy,
       });
       setAssembledBNGL(bngl || '');
+      if (bngl) {
+        onCodeChange(bngl);
+      }
       if (!bngl) {
         if (activeTab === 'indra-db') {
           setDbError('INDRA assembly returned empty BNGL output.');
@@ -264,10 +271,6 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
     } finally {
       setAssembling(false);
     }
-  }
-
-  function handleSendToCodeEditor(code: string) {
-    onCodeChange(code);
   }
 
   async function handleParseAndSimulate(code: string) {
@@ -332,6 +335,11 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                 </Button>
               </>
             )}
+            {(activeTab === 'indra-nlp' || activeTab === 'indra-db') && (
+              <Button variant="subtle" onClick={() => setIsIndraGuideOpen(true)} className="text-xs">
+                INDRA Guide
+              </Button>
+            )}
           </div>
         </div>
 
@@ -383,9 +391,9 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
         {activeTab === 'grammar' ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 pb-4">
             <div className="flex min-h-0 flex-[1.35] gap-4">
               <div className="flex min-h-0 flex-1 flex-col">
                 <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Natural Language Input</h3>
@@ -455,7 +463,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
             </div>
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 pb-4">
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
               <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
                 {activeTab === 'indra-nlp' ? (
@@ -486,7 +494,13 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                           <option value="interactions_only">interactions_only</option>
                         </select>
                       </label>
+                      <Button variant="subtle" className="px-3 py-1 text-xs" onClick={() => setIsIndraGuideOpen(true)}>
+                        What do these mean?
+                      </Button>
                       {nlpLoading && <span className="text-xs text-slate-500 dark:text-slate-400">Processing...</span>}
+                    </div>
+                    <div className="mt-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
+                      <span className="font-semibold">Policy:</span> `one_step` is the simplest default for NLP text. Open `INDRA Guide` for assembly details and docs links.
                     </div>
                     {nlpError && (
                       <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
@@ -566,7 +580,13 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                           <option value="interactions_only">interactions_only</option>
                         </select>
                       </label>
+                      <Button variant="subtle" className="px-3 py-1 text-xs" onClick={() => setIsIndraGuideOpen(true)}>
+                        What do these mean?
+                      </Button>
                       {dbLoading && <span className="text-xs text-slate-500 dark:text-slate-400">Searching...</span>}
+                    </div>
+                    <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+                      <span className="font-semibold">Policy:</span> `two_step` is usually best for curated INDRA DB statements because it preserves more mechanism.
                     </div>
                     {dbError && (
                       <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
@@ -631,24 +651,14 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Generated BNGL</h3>
                   <span className="text-xs text-slate-400">{previewLineCount(assembledBNGL)}</span>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="primary"
-                    className="text-xs"
-                    onClick={() => assembledBNGL && handleSendToCodeEditor(assembledBNGL)}
-                    disabled={!assembledBNGL}
-                  >
-                    Send to Code Editor
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    className="text-xs"
-                    onClick={() => assembledBNGL && void handleParseAndSimulate(assembledBNGL)}
-                    disabled={!assembledBNGL}
-                  >
-                    Parse and Simulate
-                  </Button>
-                </div>
+                <Button
+                  variant="primary"
+                  className="text-xs"
+                  onClick={() => assembledBNGL && void handleParseAndSimulate(assembledBNGL)}
+                  disabled={!assembledBNGL}
+                >
+                  Sync and Visualize
+                </Button>
               </div>
               <div className="overflow-hidden rounded-md border border-slate-200 shadow-sm dark:border-slate-700">
                 <div className="h-64 min-h-[16rem]">
@@ -678,6 +688,62 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
       </div>
 
       <CheatsheetModal isOpen={isCheatsheetOpen} onClose={() => setIsCheatsheetOpen(false)} />
+      {isIndraGuideOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4">
+          <div className="w-full max-w-xl rounded-xl bg-white p-5 shadow-xl dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold">INDRA Guide</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  INDRA assembles natural-language or literature-backed statements into BNGL. The assembly policy controls how detailed the generated mechanism is.
+                </p>
+              </div>
+              <Button variant="subtle" className="px-3 py-1 text-xs" onClick={() => setIsIndraGuideOpen(false)}>
+                Close
+              </Button>
+            </div>
+            <div className="mt-4 space-y-4 text-sm text-slate-700 dark:text-slate-200">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <a
+                  href={INDRA_DOCS_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
+                >
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Docs</div>
+                  <div className="mt-1 font-semibold">INDRA REST API Docs</div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">ReadTheDocs reference for the REST service.</div>
+                </a>
+                <a
+                  href={INDRA_API_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
+                >
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Live API</div>
+                  <div className="mt-1 font-semibold">api.indra.bio</div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Swagger UI for the currently deployed INDRA endpoints.</div>
+                </a>
+              </div>
+              <div>
+                <div className="font-semibold">`one_step`</div>
+                <div className="mt-1">Collapses an interaction into a direct rule. Best when you want a compact model or when NLP output is noisy.</div>
+              </div>
+              <div>
+                <div className="font-semibold">`two_step`</div>
+                <div className="mt-1">Separates recognition/binding from the state change. Usually more mechanistic and a better default for curated INDRA DB statements.</div>
+              </div>
+              <div>
+                <div className="font-semibold">`interactions_only`</div>
+                <div className="mt-1">Keeps only the interaction scaffold with minimal mechanistic detail. Useful for quick inspection or lightweight drafts.</div>
+              </div>
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                Assembled BNGL is automatically pushed into the main editor. Use `Sync and Visualize` once the preview looks right.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

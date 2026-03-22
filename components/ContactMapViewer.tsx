@@ -70,19 +70,19 @@ const LAYOUT_CONFIGS: Record<LayoutType, any> = {
     step: 'all',
     // Force parameters tuned for BNGL contact maps:
     // Higher repulsion pushes molecules apart so edges don't cross parents
-    nodeRepulsion: 8000,
+    nodeRepulsion: 14000,
     // Longer ideal edge length gives compound nodes room to breathe
-    idealEdgeLength: 80,
+    idealEdgeLength: 110,
     edgeElasticity: 0.45,
     // Low nesting factor keeps children compact inside their parent
     nestingFactor: 0.1,
-    gravity: 0.25,
+    gravity: 0.18,
     gravityRange: 3.8,
     numIter: 2500,
     // Tiling controls how disconnected components are arranged
     tile: true,
-    tilingPaddingVertical: 20,
-    tilingPaddingHorizontal: 20,
+    tilingPaddingVertical: 28,
+    tilingPaddingHorizontal: 28,
   },
   grid: {
     name: 'grid',
@@ -194,8 +194,8 @@ export function getContactMapStyles(isDark: boolean): any[] {
       selector: 'node[type = "molecule"]:parent',
       style: {
         'text-valign': 'top',
-        'text-margin-y': 18,
-        padding: '30px',
+        'text-margin-y': 20,
+        padding: '36px',
         'min-width': 60,
         'compound-sizing-wrt-labels': 'exclude',
         'text-wrap': 'none',
@@ -208,7 +208,7 @@ export function getContactMapStyles(isDark: boolean): any[] {
       style: {
         width: 'label',
         height: 'label',
-        padding: '10px',
+        padding: '14px',
         'text-valign': 'center',
         'text-margin-y': 0,
         'min-width': 60,
@@ -248,8 +248,8 @@ export function getContactMapStyles(isDark: boolean): any[] {
       selector: 'node[type = "component"]:parent',
       style: {
         'text-valign': 'top',
-        'text-margin-y': 14,
-        padding: '14px',
+        'text-margin-y': 16,
+        padding: '18px',
         'compound-sizing-wrt-labels': 'exclude',
       },
     },
@@ -259,7 +259,7 @@ export function getContactMapStyles(isDark: boolean): any[] {
       style: {
         width: 'label',
         height: 'label',
-        padding: '6px',
+        padding: '10px',
         'text-valign': 'center',
         'text-margin-y': 0,
       },
@@ -272,7 +272,7 @@ export function getContactMapStyles(isDark: boolean): any[] {
         'background-color': '#FFCC00',
         'border-color': '#000000',
         'border-width': 1,
-        padding: '6px',
+        padding: '8px',
         width: 'label',
         height: 'label',
         'min-width': 20,
@@ -340,14 +340,15 @@ export function getContactMapStyles(isDark: boolean): any[] {
  * for compound-node label zones — they place children based purely on
  * forces / ranks, which can spread them far apart and overlap labels.
  */
-function packCompoundChildren(cy: cytoscape.Core): void {
+function getPackedChildPositions(cy: cytoscape.Core): Map<string, cytoscape.Position> {
   const CHILD_GAP = 10;
   const MOL_LABEL_OFFSET = 20;
   const COMP_LABEL_OFFSET = 14;
+  const packedPositions = new Map<string, cytoscape.Position>();
 
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-  if (!ctx) return;
+  if (!ctx) return packedPositions;
 
   const measureLabel = (text: string, bold: boolean, fontSize = 14): number => {
     ctx.font = `${bold ? 'bold ' : ''}${fontSize}px system-ui, -apple-system, sans-serif`;
@@ -393,7 +394,7 @@ function packCompoundChildren(cy: cytoscape.Core): void {
       let curX = anchorX - totalW / 2;
       const targetY = anchorY + labelOffset;
       for (const info of infos) {
-        info.node.position({ x: curX + info.w / 2, y: targetY });
+        packedPositions.set(info.node.id(), { x: curX + info.w / 2, y: targetY });
         curX += info.w + effectiveGap;
       }
     });
@@ -401,6 +402,52 @@ function packCompoundChildren(cy: cytoscape.Core): void {
 
   packLevel('[type = "component"]:parent', 10, false, COMP_LABEL_OFFSET);
   packLevel('[type = "molecule"]:parent', 30, true, MOL_LABEL_OFFSET);
+  return packedPositions;
+}
+
+function applyPackedLayout(
+  cy: cytoscape.Core,
+  packedPositions: Map<string, cytoscape.Position>,
+  options: {
+    padding?: number;
+    animate?: boolean;
+    duration?: number;
+    shouldApply?: () => boolean;
+    onDone?: () => void;
+  } = {},
+): void {
+  const {
+    padding = 30,
+    animate = true,
+    duration = 220,
+    shouldApply,
+    onDone,
+  } = options;
+
+  if (shouldApply && !shouldApply()) return;
+
+  const positions = Object.fromEntries(packedPositions.entries());
+  if (Object.keys(positions).length === 0) {
+    cy.resize();
+    cy.fit(undefined, padding);
+    onDone?.();
+    return;
+  }
+
+  const layout = cy.layout({
+    name: 'preset',
+    positions,
+    fit: true,
+    padding,
+    animate,
+    animationDuration: duration,
+  });
+
+  layout.on('layoutstop', () => {
+    if (shouldApply && !shouldApply()) return;
+    onDone?.();
+  });
+  layout.run();
 }
 
 export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, selectedRuleId, onSelectRule, ruleOverlay, dynamicSnapshot }) => {
@@ -409,6 +456,7 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
   const [activeLayout, setActiveLayout] = useState<LayoutType>('fcose');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
+  const layoutSequenceRef = useRef(0);
   const onSelectRuleRef = useRef(onSelectRule);
   onSelectRuleRef.current = onSelectRule;
 
@@ -454,25 +502,21 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
 
     cy.ready(() => {
       // Execute true layout algorithm once Cytoscape is natively attached.
-      const initialLayout = cy.layout({ ...BASE_LAYOUT, animate: false });
+      const layoutSequence = ++layoutSequenceRef.current;
+      const initialLayout = cy.layout({ ...BASE_LAYOUT, animate: false, fit: false });
       initialLayout.on('layoutstop', () => {
-        packCompoundChildren(cy);
-        // Guarantee fit across React rendering paints and container resizing 
-        const forceViewport = () => {
-          cyRef.current?.resize();
-          cyRef.current?.fit(undefined, 30);
-        };
-
-        requestAnimationFrame(() => {
-          forceViewport();
-          setTimeout(forceViewport, 50);
-          setTimeout(forceViewport, 150);
-          setTimeout(forceViewport, 300);
-          // Wait for 300ms layout-settling tick to fade canvas in, hiding layout pop
+        const packedPositions = getPackedChildPositions(cy);
+        applyPackedLayout(cy, packedPositions, {
+          padding: 30,
+          animate: false,
+          shouldApply: () => layoutSequenceRef.current === layoutSequence,
+          onDone: () => {
           setTimeout(() => {
+            if (layoutSequenceRef.current !== layoutSequence) return;
             setLayoutDone(true);
             setIsLayoutRunning(false);
           }, 50);
+          },
         });
       });
       initialLayout.run();
@@ -525,15 +569,29 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
     setIsLayoutRunning(true);
     setActiveLayout(layoutType);
     try {
-      const layout = cy.layout(LAYOUT_CONFIGS[layoutType]);
-      layout.run();
-      layout.on('layoutstop', () => {
-        packCompoundChildren(cy);
-        setIsLayoutRunning(false);
-        cy.fit(undefined, 30);
+      const layoutSequence = ++layoutSequenceRef.current;
+      const layout = cy.layout({
+        ...LAYOUT_CONFIGS[layoutType],
+        fit: false,
       });
+      layout.on('layoutstop', () => {
+        const packedPositions = getPackedChildPositions(cy);
+        applyPackedLayout(cy, packedPositions, {
+          padding: 40,
+          animate: true,
+          duration: 240,
+          shouldApply: () => layoutSequenceRef.current === layoutSequence,
+          onDone: () => {
+            if (layoutSequenceRef.current !== layoutSequence) return;
+            setLayoutDone(true);
+            setIsLayoutRunning(false);
+          },
+        });
+      });
+      layout.run();
     } catch (err) {
       console.error('Layout failed', err);
+      setLayoutDone(true);
       setIsLayoutRunning(false);
     }
   };
@@ -608,26 +666,26 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
       <div className="flex flex-col gap-1 bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700 shadow-sm">
         <div className="flex items-center gap-1">
           <span className="text-xs text-slate-500 dark:text-slate-400 mr-1">Layout:</span>
-          <Button variant={activeLayout === 'fcose' ? 'primary' : 'subtle'} onClick={() => runLayout('fcose')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Smart Compound Layout (Default)">
-            {isLayoutRunning && activeLayout === 'fcose' ? <LoadingSpinner className="w-3 h-3" /> : '✨ Smart'}
-          </Button>
           <Button variant={activeLayout === 'hierarchical' ? 'primary' : 'subtle'} onClick={() => runLayout('hierarchical')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Hierarchical (dagre)">
-            {isLayoutRunning && activeLayout === 'hierarchical' ? <LoadingSpinner className="w-3 h-3" /> : '↓ Hier'}
+            {isLayoutRunning && activeLayout === 'hierarchical' ? <LoadingSpinner className="w-3 h-3" /> : '\u2193 Hier'}
           </Button>
           <Button variant={activeLayout === 'cose' ? 'primary' : 'subtle'} onClick={() => runLayout('cose')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Force-Directed (Standard)">
-            {isLayoutRunning && activeLayout === 'cose' ? <LoadingSpinner className="w-3 h-3" /> : '⚡ Cose'}
+            {isLayoutRunning && activeLayout === 'cose' ? <LoadingSpinner className="w-3 h-3" /> : '\u26A1 Cose'}
+          </Button>
+          <Button variant={activeLayout === 'fcose' ? 'primary' : 'subtle'} onClick={() => runLayout('fcose')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Smart Compound Layout (Default)">
+            {isLayoutRunning && activeLayout === 'fcose' ? <LoadingSpinner className="w-3 h-3" /> : '\u2728 Smart'}
           </Button>
           <Button variant={activeLayout === 'grid' ? 'primary' : 'subtle'} onClick={() => runLayout('grid')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Grid Layout">
-            {isLayoutRunning && activeLayout === 'grid' ? <LoadingSpinner className="w-3 h-3" /> : '▦ Grid'}
+            {isLayoutRunning && activeLayout === 'grid' ? <LoadingSpinner className="w-3 h-3" /> : '\u25A6 Grid'}
           </Button>
           <Button variant={activeLayout === 'concentric' ? 'primary' : 'subtle'} onClick={() => runLayout('concentric')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Concentric Rings">
-            {isLayoutRunning && activeLayout === 'concentric' ? <LoadingSpinner className="w-3 h-3" /> : '◎ Rings'}
+            {isLayoutRunning && activeLayout === 'concentric' ? <LoadingSpinner className="w-3 h-3" /> : '\u25CE Rings'}
           </Button>
           <Button variant={activeLayout === 'breadthfirst' ? 'primary' : 'subtle'} onClick={() => runLayout('breadthfirst')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Breadth-first Tree">
-            {isLayoutRunning && activeLayout === 'breadthfirst' ? <LoadingSpinner className="w-3 h-3" /> : '⊢ Tree'}
+            {isLayoutRunning && activeLayout === 'breadthfirst' ? <LoadingSpinner className="w-3 h-3" /> : '\u22A2 Tree'}
           </Button>
           <Button variant={activeLayout === 'circle' ? 'primary' : 'subtle'} onClick={() => runLayout('circle')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Circle Layout">
-            {isLayoutRunning && activeLayout === 'circle' ? <LoadingSpinner className="w-3 h-3" /> : '○ Circle'}
+            {isLayoutRunning && activeLayout === 'circle' ? <LoadingSpinner className="w-3 h-3" /> : '\u25CB Circle'}
           </Button>
         </div>
         <div className="flex items-center gap-1">

@@ -96,9 +96,36 @@ function detectSimMethodFromCode(text: string): 'ode' | 'ssa' | 'nfsim' | 'unspe
     return 'unspecified';
 }
 
-function hasOnlyOdeSimulationPhases(model: BNGLModel): boolean {
+function hasBatchCompatibleSimulationPhases(model: BNGLModel): boolean {
     const phases = model.simulationPhases ?? [];
-    return phases.length > 0 && phases.every((phase) => phase.method === 'ode');
+    return phases.length > 0 && phases.every((phase) => phase.method === 'ode' || phase.method === 'ssa');
+}
+
+function resolveBatchSimulationMethod(
+    model: BNGLModel,
+    code: string
+): 'ode' | 'ssa' | 'nfsim' {
+    if (hasBatchCompatibleSimulationPhases(model)) {
+        return model.simulationPhases?.some((phase) => phase.method === 'ssa') ? 'ssa' : 'ode';
+    }
+
+    const detectedMethod = detectSimMethodFromCode(code);
+    if (detectedMethod === 'ssa') return 'ssa';
+    if (detectedMethod === 'nfsim') return 'nfsim';
+    return 'ode';
+}
+
+function ensureBatchSimulationPhases(model: BNGLModel, method: 'ode' | 'ssa'): void {
+    if ((model.simulationPhases?.length ?? 0) > 0) return;
+
+    const options = getSimulationOptionsFromParsedModel(model, method);
+    model.simulationPhases = [{
+        method,
+        t_end: options.t_end,
+        n_steps: options.n_steps,
+        ...(options.atol !== undefined ? { atol: options.atol } : {}),
+        ...(options.rtol !== undefined ? { rtol: options.rtol } : {}),
+    }];
 }
 
 /**
@@ -139,21 +166,26 @@ export async function runSingleBatchItem(
         const model: BNGLModel = await simulator.parse(code, { description: `Batch Parse: ${modelDef.name}` });
         if (verbose) reporter.timeEnd('Parse');
 
-        if (!hasOnlyOdeSimulationPhases(model)) {
+        const detectedMethod = detectSimMethodFromCode(code);
+        const batchMethod = resolveBatchSimulationMethod(model, code);
+        if (batchMethod === 'nfsim') {
             const modelLabel = modelDef.id || modelDef.name;
-            const simMethod = detectSimMethodFromCode(code);
-            reporter.warn(`[Batch] Skipping ${modelLabel}: explicit ODE-only simulate actions required (detected: ${simMethod}).`);
+            reporter.warn(`[Batch] Skipping ${modelLabel}: NFsim models are not supported by the batch runner (detected: ${detectedMethod}).`);
             reporter.groupEnd();
             return false;
         }
 
+        ensureBatchSimulationPhases(model, batchMethod);
+
         // 1b. Network Generation
         const actions = model.actions || [];
+        const hasReactionRules = (model.reactionRules?.length ?? 0) > 0;
+        const hasExpandedNetwork = (model.reactions?.length ?? 0) > 0;
         const needsNetGen = actions.some(a =>
             a.type === 'generate_network' ||
             a.type === 'simulate_ode' ||
             (a.type === 'simulate' && a.args?.method === 'ode')
-        );
+        ) || (actions.length === 0 && batchMethod === 'ode' && hasReactionRules && !hasExpandedNetwork);
 
         const isNfSimModel = nfSimModels?.has(modelDef.id || modelDef.name) ?? false;
 

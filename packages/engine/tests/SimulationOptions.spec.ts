@@ -1,5 +1,5 @@
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { simulate } from '../src/index';
 import { BNGLModel, SimulationOptions } from '../src/types';
 
@@ -53,9 +53,11 @@ const mockCallbacks = {
 
 describe('SimulationOptions', () => {
     let baseModel: BNGLModel;
+    let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
         vi.clearAllMocks();
+        consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         baseModel = {
             species: [{ name: 'A', initialConcentration: 100 }],
             reactions: [{
@@ -67,6 +69,10 @@ describe('SimulationOptions', () => {
             moleculeTypes: [], // Satisfy type
             reactionRules: []
         };
+    });
+
+    afterEach(() => {
+        consoleErrorSpy.mockRestore();
     });
 
     // 16. Run with method: "ode"

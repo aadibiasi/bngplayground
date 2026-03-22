@@ -91,12 +91,30 @@ describe('INDRAService', () => {
     });
 
     it('sends statements and returns BNGL', async () => {
-      mockJsonFetch({ model: 'begin model\nend model' });
+      mockJsonFetch({
+        model: 'begin model\nbegin molecule types\n  ERK()\nend molecule types\nend model',
+      });
       const bngl = await INDRAService.assembleBNGL([{
         type: 'Phosphorylation',
         sub: { name: 'ERK', db_refs: {} },
       } as any]);
       expect(bngl).toContain('begin model');
+      expect(bngl).toContain('begin observables');
+      expect(bngl).toContain('Molecules');
+      expect(bngl).toContain('generate_network({overwrite=>1})');
+      expect(bngl).toContain('simulate({method=>"ode", t_end=>100, n_steps=>100})');
+    });
+
+    it('does not duplicate simulate actions when INDRA already returned them', async () => {
+      mockJsonFetch({
+        model: 'begin model\nend model\ngenerate_network({overwrite=>1})\nsimulate({method=>"ode", t_end=>10, n_steps=>10})\n',
+      });
+      const bngl = await INDRAService.assembleBNGL([{
+        type: 'Phosphorylation',
+        sub: { name: 'ERK', db_refs: {} },
+      } as any]);
+      expect((bngl.match(/generate_network\(/g) ?? []).length).toBe(1);
+      expect((bngl.match(/simulate\(/g) ?? []).length).toBe(1);
     });
   });
 
