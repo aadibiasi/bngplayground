@@ -37,6 +37,15 @@ function shouldUseBioModelsProxy(): boolean {
   const explicitBase = getEnvString('VITE_BIOMODELS_API_BASE');
   if (explicitBase) return explicitBase.startsWith('/');
 
+  // In Vite dev mode, always use the local proxy to avoid browser CORS limits.
+  try {
+    if ((import.meta as ImportMeta & { env?: Record<string, unknown> }).env?.DEV) {
+      return true;
+    }
+  } catch {
+    // ignore env access failures and fall through to hostname checks
+  }
+
   if (typeof window === 'undefined') return false;
   const host = window.location.hostname;
   return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
