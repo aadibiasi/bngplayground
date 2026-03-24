@@ -44,6 +44,10 @@ export interface FitConfig {
     maxEval?: number;
     /** Absolute function-value tolerance (default 1e-6). */
     ftol?: number;
+    /** BPSL constraint text (one constraint per line). */
+    bpslConstraints?: string;
+    /** Weight for BPSL penalty relative to SSE (default 1.0). */
+    bpslWeight?: number;
     onProgress?: (p: FitProgress) => void;
     signal?: AbortSignal;
 }
@@ -61,7 +65,7 @@ export interface FitConfig {
 export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
     const {
         model, modelId, paramBounds, experimentalData,
-        algorithm, maxEval, ftol, onProgress, signal,
+        algorithm, maxEval, ftol, bpslConstraints, bpslWeight, onProgress, signal,
     } = cfg;
 
     const timePoints = experimentalData.map(d => d.time);
@@ -87,6 +91,8 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
         algorithm,
         maxEval,
         ftol,
+        bpslConstraints,
+        bpslWeight,
         onProgress,
         signal,
     };

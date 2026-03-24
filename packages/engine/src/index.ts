@@ -76,6 +76,8 @@ export { roundForInput, DEFAULT_ZERO_DELTA, formatNumber, computeDefaultBounds, 
 export { fitParameters } from './services/analysis/paramFitter';
 export { MassBalance } from './services/analysis/MassBalance';
 export type { FitAlgorithm, ParamBounds, FitProgress, FitResult, FitConfig, ExperimentalDataPoint } from './services/analysis/paramFitter';
+export { parseBPSL, evaluateBPSL } from './services/analysis/bpsl';
+export type { BPSLConstraint, BPSLResult, BPSLConstraintResult, ConstraintType } from './services/analysis/bpsl';
 
 // ── Utils ───────────────────────────────────────────────────────────
 export { SafeExpressionEvaluator } from './utils/safeExpressionEvaluator';
@@ -96,6 +98,8 @@ export { projectedNM } from './services/optimization/projectedNM';
 export type { ProjectedNMOptions } from './services/optimization/projectedNM';
 export { sbplx } from './services/optimization/sbplx';
 export type { SbplxOptions, SbplxResult } from './services/optimization/sbplx';
+export { differentialEvolution } from './services/optimization/differentialEvolution';
+export type { DEOptions, DEProgress, DEResult } from './services/optimization/differentialEvolution';
 
 // ── Debugger ────────────────────────────────────────────────────────
 export { NetworkTracer } from './services/debugger/NetworkTracer';

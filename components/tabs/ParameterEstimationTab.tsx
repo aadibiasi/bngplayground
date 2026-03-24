@@ -45,6 +45,14 @@ interface EstimationResult {
   percentiles: { q1: number; q3: number; median: number }[];
   priorMeans: number[];
   algorithm?: string;
+  bpslResults?: {
+    totalPenalty: number;
+    details: Array<{
+      constraint: { source: string };
+      satisfied: boolean;
+      message: string;
+    }>;
+  };
 }
 
 // Default data for testing - uses typical BNGL observable names
@@ -73,6 +81,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
   // Estimation settings
   const [nIterations, setNIterations] = useState('500');
   const [algorithm, setAlgorithm] = useState<FitAlgorithm>('nelder-mead');
+  const [bpslText, setBpslText] = useState('');
 
   // Results
   const [result, setResult] = useState<EstimationResult | null>(null);
@@ -222,6 +231,8 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
         experimentalData: parsedData,
         algorithm,
         maxEval,
+        bpslConstraints: bpslText,
+        bpslWeight: 1.0,
         signal: controller.signal,
         onProgress: (p) => {
           if (isMountedRef.current) {
@@ -256,6 +267,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
           percentiles:       percentilesPerParam,
           priorMeans:        priorMeansSnapshot,
           algorithm:         fitResult.algorithm,
+          bpslResults:       fitResult.bpslResults,
         });
 
         // Initialize visible series for results
@@ -477,6 +489,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                 <option value="sbplx">Subplex (Robust Local)</option>
                 <option value="bobyqa">BOBYQA (Derivative-free)</option>
                 <option value="projected-nm">Projected NM (Bounded)</option>
+                <option value="de">Differential Evolution (Global)</option>
               </select>
             </div>
             <div className="space-y-1">
@@ -489,6 +502,22 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                 onChange={e => setNIterations(e.target.value)}
                 className="h-8 text-xs"
               />
+            </div>
+            <div className="mt-3">
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                Qualitative Constraints (BPSL)
+              </label>
+              <textarea
+                className="w-full h-20 text-xs font-mono rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2"
+                placeholder={`# One constraint per line\nmonotone_increasing B\nsteady_state A 0.01\npeak_before B 50`}
+                value={bpslText}
+                onChange={e => setBpslText(e.target.value)}
+                spellCheck={false}
+              />
+              <p className="text-[10px] text-slate-500 mt-0.5">
+                PyBioNetFit-compatible BPSL constraints. See{' '}
+                <a href="https://pybnf.readthedocs.io" target="_blank" rel="noreferrer" className="underline">docs</a>.
+              </p>
             </div>
           </div>
           
@@ -682,6 +711,30 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                 ])}
               />
             </Card>
+
+            {result.bpslResults && result.bpslResults.details.length > 0 && (
+              <Card className="p-4 space-y-2">
+                <h4 className="text-xs font-semibold">Qualitative Constraints (BPSL)</h4>
+                <div className="space-y-1">
+                  {result.bpslResults.details.map((d, i) => (
+                    <div
+                      key={i}
+                      className={`text-xs px-2 py-1 rounded ${
+                        d.satisfied
+                          ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+                          : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+                      }`}
+                    >
+                      <span className="font-mono">{d.constraint.source}</span>
+                      <span className="ml-2">-&gt; {d.message}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-xs mt-2 text-slate-500">
+                  Total BPSL penalty: {result.bpslResults.totalPenalty.toExponential(3)}
+                </div>
+              </Card>
+            )}
 
             {/* Confidence Intervals Plot */}
             <Card className="p-4 space-y-4">

@@ -5,12 +5,16 @@ import { nelderMead, NelderMeadProgress } from '../optimization/nelderMead';
 import { sbplx } from '../optimization/sbplx';
 import { projectedNM } from '../optimization/projectedNM';
 import type { ProjectedNMOptions } from '../optimization/projectedNM';
+import { differentialEvolution } from '../optimization/differentialEvolution';
+import type { DEProgress } from '../optimization/differentialEvolution';
+import { parseBPSL, evaluateBPSL } from './bpsl';
+import type { BPSLConstraint, BPSLResult } from './bpsl';
 
 // ---------------------------------------------------------------------------
 // Types (intentional match of UI-side names)
 // ---------------------------------------------------------------------------
 
-export type FitAlgorithm = 'nelder-mead' | 'sbplx' | 'projected-nm' | 'bobyqa';
+export type FitAlgorithm = 'nelder-mead' | 'sbplx' | 'projected-nm' | 'bobyqa' | 'de';
 
 export interface ParamBounds {
   name: string;
@@ -44,6 +48,8 @@ export interface FitResult {
   bestPredictions: Map<string, number[]>;
   confidenceIntervals: { lower: number; upper: number }[];
   algorithm: string;
+  /** BPSL constraint results at best-fit parameters (if constraints were specified). */
+  bpslResults?: BPSLResult;
 }
 
 export interface FitConfig {
@@ -64,6 +70,10 @@ export interface FitConfig {
    * will be overridden by values derived from the experimental data if provided.
    */
   simOptions?: Partial<SimulationOptions>;
+  /** BPSL constraint text (one constraint per line). */
+  bpslConstraints?: string;
+  /** Weight for BPSL penalty relative to SSE (default 1.0). */
+  bpslWeight?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,7 +92,13 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
     onProgress,
     signal,
     simOptions = {},
+    bpslConstraints,
+    bpslWeight = 1.0,
   } = cfg;
+
+  const constraints: BPSLConstraint[] = (bpslConstraints ?? '').trim()
+    ? parseBPSL(bpslConstraints ?? '')
+    : [];
 
   const n = paramBounds.length;
   const paramNames = paramBounds.map(b => b.name);
@@ -145,6 +161,24 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
           sse += diff * diff;
         }
       }
+
+      if (constraints.length > 0) {
+        const obsMap = new Map<string, number[]>();
+        for (const obs of model.observables.map(o => o.name)) {
+          obsMap.set(
+            obs,
+            timePoints.map(t => {
+              const row =
+                dataRows.find(r => Math.abs(r.time - t) < 1e-12) ??
+                interpolateRow(dataRows, t);
+              return row?.[obs] ?? 0;
+            })
+          );
+        }
+        const bpslResult = evaluateBPSL(constraints, timePoints, obsMap);
+        sse += bpslWeight * bpslResult.totalPenalty;
+      }
+
       nEval++;
       return isFinite(sse) ? sse : 1e12;
     } catch {
@@ -206,6 +240,95 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
       nmResult = coResult;
       break;
     }
+    case 'de': {
+      const deResult = await differentialEvolution(
+        async (x: number[]) => {
+          if (signal?.aborted) return Infinity;
+          const overrides: Record<string, number> = {};
+          for (let i = 0; i < n; i++) overrides[paramNames[i]] = x[i];
+          try {
+            const simResult = await simulate(overrides, {
+              method: 'ode',
+              t_end: tEnd,
+              n_steps: nSteps,
+              atol: 1e-8,
+              rtol: 1e-6,
+              ...simOptions,
+            });
+
+            let sse = 0;
+            const dataRows = simResult.data;
+            for (const obs of sharedObs) {
+              const simVals = timePoints.map(t => {
+                const row =
+                  dataRows.find(r => Math.abs(r.time - t) < 1e-12) ??
+                  interpolateRow(dataRows, t);
+                return row?.[obs] ?? 0;
+              });
+              const obsData = observed[obs];
+              for (let i = 0; i < simVals.length; i++) {
+                const diff = simVals[i] - obsData[i];
+                sse += diff * diff;
+              }
+            }
+
+            if (constraints.length > 0) {
+              const obsMap = new Map<string, number[]>();
+              for (const obs of model.observables.map(o => o.name)) {
+                obsMap.set(
+                  obs,
+                  timePoints.map(t => {
+                    const row =
+                      dataRows.find(r => Math.abs(r.time - t) < 1e-12) ??
+                      interpolateRow(dataRows, t);
+                    return row?.[obs] ?? 0;
+                  })
+                );
+              }
+              const bpslResult = evaluateBPSL(constraints, timePoints, obsMap);
+              sse += bpslWeight * bpslResult.totalPenalty;
+            }
+
+            return isFinite(sse) ? sse : 1e12;
+          } catch {
+            return 1e12;
+          }
+        },
+        paramBounds.map(b => b.initial),
+        {
+          lowerBounds: paramBounds.map(b => b.min),
+          upperBounds: paramBounds.map(b => b.max),
+          maxEval,
+          ftol,
+          signal,
+          popSize: Math.max(20, 10 * n),
+          maxParallel: 4,
+          onProgress: (info: DEProgress) => {
+            sseHistory.push(info.bestValue);
+            onProgress?.({
+              nEval: info.nEval,
+              sse: info.bestValue,
+              params: [...info.bestX],
+              iteration: info.generation,
+            });
+          },
+        }
+      );
+
+      nmResult = {
+        x: deResult.x,
+        value: deResult.value,
+        nEval: deResult.nEval,
+        iterations: deResult.generations,
+        converged: deResult.converged,
+      };
+
+      const deParams = deResult.x.map((v, i) =>
+        Math.max(paramBounds[i].min, Math.min(paramBounds[i].max, v))
+      );
+      nmResult.x = encode(deParams);
+      break;
+    }
     case 'nelder-mead':
     default: {
       const nmRes = await nelderMead(objective, x0encoded, {
@@ -225,6 +348,7 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
 
   const bestPredictions = new Map<string, number[]>();
   let finalSse = nmResult.value;
+  let bpslResults: BPSLResult | undefined;
 
   try {
     const finalSim = await simulate(bestOverrides, {
@@ -257,6 +381,24 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
         sse += diff * diff;
       }
     }
+
+    if (constraints.length > 0) {
+      const obsMap = new Map<string, number[]>();
+      for (const obs of model.observables.map(o => o.name)) {
+        obsMap.set(
+          obs,
+          timePoints.map(t => {
+            const row =
+              finalSim.data.find(r => Math.abs(r.time - t) < 1e-12) ??
+              interpolateRow(finalSim.data, t);
+            return row?.[obs] ?? 0;
+          })
+        );
+      }
+      bpslResults = evaluateBPSL(constraints, timePoints, obsMap);
+      sse += bpslWeight * bpslResults.totalPenalty;
+    }
+
     finalSse = sse;
   } catch {
     /* keep nmResult.value */
@@ -296,6 +438,7 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
     bestPredictions,
     confidenceIntervals,
     algorithm,
+    bpslResults,
   };
 }
 
