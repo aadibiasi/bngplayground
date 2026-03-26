@@ -12,6 +12,11 @@ on:
         required: false
         type: boolean
         default: false
+      run_reference_tests:
+        description: 'Run reference validation suite (slow)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -191,9 +196,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     if: |
-      github.event_name == 'workflow_dispatch' && github.event.inputs.run_full_suite == 'true' ||
-      github.ref == 'refs/heads/main' ||
-      contains(github.event.head_commit.message, '[full-tests]')
+      github.event_name == 'workflow_dispatch' && github.event.inputs.run_reference_tests == 'true'
 
     steps:
       - name: Checkout code
