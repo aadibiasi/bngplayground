@@ -53,7 +53,7 @@ type JobState = {
 
 const jobStates = new Map<number, JobState>();
 let activeSimulationJobId: number | null = null;
-let activeSimulationMethod: 'ode' | 'ssa' | 'nf' | null = null;
+let activeSimulationMethod: 'ode' | 'ssa' | 'nf' | 'pla' | null = null;
 
 // Ring buffer for logs to prevent memory blowup
 // Default size (1000) chosen to capture ~5-10 minutes of active simulation logs
@@ -525,13 +525,13 @@ if (typeof ctx.addEventListener === 'function') {
           // 1. Explicit override from options.method (if not 'default')
           // 2. Explicit method in model actions/phases (if they exist)
           // 3. Fallback to 'ode'
-          let effectiveMethod: 'ode' | 'ssa' | 'nf' = 'ode';
+          let effectiveMethod: 'ode' | 'ssa' | 'nf' | 'pla' = 'ode';
 
           if (options.method && options.method !== 'default') {
-            effectiveMethod = options.method as 'ode' | 'ssa' | 'nf';
+            effectiveMethod = options.method as 'ode' | 'ssa' | 'nf' | 'pla';
           } else if (phases.length > 0) {
             const m = phases[0].method;
-            if (m === 'nf' || m === 'ssa' || m === 'ode') {
+            if (m === 'nf' || m === 'ssa' || m === 'ode' || m === 'pla') {
               effectiveMethod = m;
             }
           }

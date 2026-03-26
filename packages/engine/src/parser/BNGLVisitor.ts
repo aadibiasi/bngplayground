@@ -20,7 +20,9 @@ import type {
   ConcentrationChange,
   ParameterChange,
   BNGLEnergyPattern,
-  BNGLAction
+  BNGLAction,
+  BNGLPopulationMap,
+  BNGLPopulationType
 } from '../types';
 
 const BNGL_VISITOR_DEBUG =
@@ -48,6 +50,8 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
   private actions: BNGLAction[] = [];
   private speciesExpressions: string[] = [];
   private energyPatterns: BNGLEnergyPattern[] = [];
+  private populationMaps: BNGLPopulationMap[] = [];
+  private populationTypes: BNGLPopulationType[] = [];
 
   protected defaultResult(): BNGLModel {
     return {
@@ -67,6 +71,8 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       actions: this.actions,
       paramExpressions: { ...this.paramExpressions },  // Export for setParameter recalculation
       energyPatterns: this.energyPatterns,
+      populationMaps: this.populationMaps.length > 0 ? this.populationMaps : undefined,
+      populationTypes: this.populationTypes.length > 0 ? this.populationTypes : undefined,
     };
   }
 
@@ -242,6 +248,25 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     const energyPatternsBlock = ctx.energy_patterns_block();
     if (energyPatternsBlock) {
       this.visitEnergy_patterns_block(energyPatternsBlock);
+      return;
+    }
+
+    const popMapsBlock = ctx.population_maps_block();
+    if (popMapsBlock) {
+      this.visitPopulation_maps_block(popMapsBlock);
+      return;
+    }
+
+    const popTypesBlock = ctx.population_types_block();
+    if (popTypesBlock) {
+      this.visitPopulation_types_block(popTypesBlock);
+      return;
+    }
+
+    // Loose action commands between blocks (BNG2 parity)
+    const actionCmd = ctx.action_command();
+    if (actionCmd) {
+      this.visit(actionCmd);
       return;
     }
   }
@@ -787,6 +812,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       : undefined;
 
     this.compartments.push({ name, dimension, size, parent });
+    console.log(`[BNGLVisitor] Compartment parsed: ${name} (dim: ${dimension}, parent: ${parent})`);
   }
 
   // Energy patterns block
@@ -817,6 +843,94 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       expression,
       value
     });
+  }
+
+
+  // Population maps block
+  visitPopulation_maps_block(ctx: Parser.Population_maps_blockContext): void {
+    for (const mapDef of ctx.population_map_def()) {
+      this.visitPopulation_map_def(mapDef);
+    }
+  }
+
+  visitPopulation_map_def(ctx: Parser.Population_map_defContext): void {
+    const speciesDef = ctx.species_def();
+    if (!speciesDef) return;
+
+    const pattern = this.getSpeciesString(speciesDef, { completeMissingComponents: false });
+
+    // After "->" arrow: STRING LPAREN param_list? RPAREN
+    const strings = ctx.STRING();
+    let populationName = 'P0000';
+    let lumpingRate = '0';
+
+    if (ctx.COLON() && strings.length >= 2) {
+      populationName = strings[1].text;
+    } else if (strings.length >= 1) {
+      populationName = strings[0].text;
+    }
+
+    const paramListCtx = ctx.param_list();
+    if (paramListCtx) {
+      const paramStrings = paramListCtx.STRING();
+      if (paramStrings.length > 0) {
+        lumpingRate = paramStrings[0].text;
+      }
+    }
+
+    this.populationMaps.push({
+      pattern,
+      populationName,
+      lumpingRate
+    });
+  }
+
+  visitPopulation_types_block(ctx: Parser.Population_types_blockContext): void {
+    for (const typeDef of ctx.population_type_def()) {
+      this.visitPopulation_type_def(typeDef);
+    }
+  }
+
+  visitPopulation_type_def(ctx: Parser.Population_type_defContext): void {
+    const molDef = ctx.molecule_def();
+    if (!molDef) return;
+
+    const nameNode = molDef.STRING() || (molDef as any).keyword_as_mol_name?.();
+    if (!nameNode) return;
+    const name = nameNode.text;
+    const components: string[] = [];
+
+    const compListCtx = molDef.component_def_list();
+    if (compListCtx) {
+      for (const compDef of compListCtx.component_def()) {
+        const compNameNode = compDef.STRING() || compDef.INT() || (compDef as any).keyword_as_component_name?.();
+        if (!compNameNode) continue;
+        const compName = compNameNode.text;
+        const stateList = compDef.state_list();
+        if (stateList) {
+          const stateNames = stateList.state_name();
+          const states = stateNames.map(sn => sn.text);
+          components.push(`${compName}~${states.join('~')}`);
+        } else {
+          components.push(compName);
+        }
+      }
+    }
+
+    // EXTRA PARITY FIX: If we have an extra STRING token after molecule_def,
+    // treat it as a component definition for the population type (e.g. A TypeA)
+    const extraTypeToken = ctx.STRING();
+    if (extraTypeToken) {
+      components.push(extraTypeToken.text);
+    }
+
+    this.populationTypes.push({ name, components });
+  }
+
+  visitGenerate_hybrid_model_cmd(ctx: Parser.Generate_hybrid_model_cmdContext): void {
+    const argsCtx = ctx.action_args();
+    const args = argsCtx ? this.parseActionArgs(argsCtx) : {};
+    this.actions.push({ type: 'generate_hybrid_model', args });
   }
 
   visitGenerate_network_cmd(ctx: Parser.Generate_network_cmdContext): void {

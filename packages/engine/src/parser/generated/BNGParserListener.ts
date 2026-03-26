@@ -58,11 +58,14 @@ import { Energy_patterns_blockContext } from "./BNGParser";
 import { Energy_pattern_defContext } from "./BNGParser";
 import { Population_maps_blockContext } from "./BNGParser";
 import { Population_map_defContext } from "./BNGParser";
+import { Population_types_blockContext } from "./BNGParser";
+import { Population_type_defContext } from "./BNGParser";
 import { Actions_blockContext } from "./BNGParser";
 import { Wrapped_actions_blockContext } from "./BNGParser";
 import { Begin_actions_blockContext } from "./BNGParser";
 import { Action_commandContext } from "./BNGParser";
 import { Generate_network_cmdContext } from "./BNGParser";
+import { Generate_hybrid_model_cmdContext } from "./BNGParser";
 import { Simulate_cmdContext } from "./BNGParser";
 import { Write_cmdContext } from "./BNGParser";
 import { Set_cmdContext } from "./BNGParser";
@@ -703,6 +706,28 @@ export interface BNGParserListener extends ParseTreeListener {
 	exitPopulation_map_def?: (ctx: Population_map_defContext) => void;
 
 	/**
+	 * Enter a parse tree produced by `BNGParser.population_types_block`.
+	 * @param ctx the parse tree
+	 */
+	enterPopulation_types_block?: (ctx: Population_types_blockContext) => void;
+	/**
+	 * Exit a parse tree produced by `BNGParser.population_types_block`.
+	 * @param ctx the parse tree
+	 */
+	exitPopulation_types_block?: (ctx: Population_types_blockContext) => void;
+
+	/**
+	 * Enter a parse tree produced by `BNGParser.population_type_def`.
+	 * @param ctx the parse tree
+	 */
+	enterPopulation_type_def?: (ctx: Population_type_defContext) => void;
+	/**
+	 * Exit a parse tree produced by `BNGParser.population_type_def`.
+	 * @param ctx the parse tree
+	 */
+	exitPopulation_type_def?: (ctx: Population_type_defContext) => void;
+
+	/**
 	 * Enter a parse tree produced by `BNGParser.actions_block`.
 	 * @param ctx the parse tree
 	 */
@@ -756,6 +781,17 @@ export interface BNGParserListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	exitGenerate_network_cmd?: (ctx: Generate_network_cmdContext) => void;
+
+	/**
+	 * Enter a parse tree produced by `BNGParser.generate_hybrid_model_cmd`.
+	 * @param ctx the parse tree
+	 */
+	enterGenerate_hybrid_model_cmd?: (ctx: Generate_hybrid_model_cmdContext) => void;
+	/**
+	 * Exit a parse tree produced by `BNGParser.generate_hybrid_model_cmd`.
+	 * @param ctx the parse tree
+	 */
+	exitGenerate_hybrid_model_cmd?: (ctx: Generate_hybrid_model_cmdContext) => void;
 
 	/**
 	 * Enter a parse tree produced by `BNGParser.simulate_cmd`.

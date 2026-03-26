@@ -45,6 +45,22 @@ export interface BNGLEnergyPattern {
     value?: number;
 }
 
+
+export interface BNGLPopulationMap {
+  /** Species pattern being lumped (e.g., "A(b!1).B(a!1)") */
+  pattern: string;
+  /** Population variable name (e.g., "P0001") */
+  populationName: string;
+  /** Lumping rate constant name or value */
+  lumpingRate: string;
+}
+
+export interface BNGLPopulationType {
+  /** Population molecule name (e.g., "P0001") */
+  name: string;
+  /** Components (usually empty for lumped populations) */
+  components: string[];
+}
 export interface BNGLReaction {
     reactants: string[];
     products: string[];
@@ -134,10 +150,12 @@ export interface BNGLModel {
     parameterChanges?: ParameterChange[];
     paramExpressions?: Record<string, string>;
     energyPatterns?: BNGLEnergyPattern[];
+  populationMaps?: BNGLPopulationMap[];
+  populationTypes?: BNGLPopulationType[];
 }
 
 export interface SimulationPhase {
-    method: 'ode' | 'ssa' | 'nf' | 'nfsim';
+    method: 'ode' | 'ssa' | 'nf' | 'nfsim' | 'pla';
     t_start?: number;
     t_end: number;
     n_steps: number;
@@ -196,7 +214,7 @@ export interface SSAInfluenceTimeSeries {
 }
 
 export interface SimulationOptions {
-    method: 'default' | 'ode' | 'ssa' | 'nf' | 'nfsim';
+    method: 'default' | 'ode' | 'ssa' | 'nf' | 'nfsim' | 'pla';
     t_end: number;
     n_steps: number;
     atol?: number;

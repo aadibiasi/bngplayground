@@ -175,6 +175,31 @@ export function writeBNGL(model: BNGLModel, options: BNGLWriterOptions = {}): st
     output += 'end reaction rules\n\n';
   }
 
+  // Population maps block
+  if (model.populationMaps && model.populationMaps.length > 0) {
+    output += 'begin population maps\n';
+    for (const pm of model.populationMaps) {
+      output += `  ${pm.pattern} -> ${pm.populationName}()`;
+      if (pm.lumpingRate && pm.lumpingRate !== '0') {
+         output += ` ${pm.lumpingRate}`;
+      }
+      output += '\n';
+    }
+    output += 'end population maps\n\n';
+  }
+
+  // Population types block
+  if (model.populationTypes && model.populationTypes.length > 0) {
+    output += 'begin population types\n';
+    for (const pt of model.populationTypes) {
+       const components = pt.components && pt.components.length > 0
+        ? `(${pt.components.join(',')})`
+        : '()';
+      output += `  ${pt.name}${components}\n`;
+    }
+    output += 'end population types\n\n';
+  }
+
   // Reactions block (generated reactions from network generation)
   if (model.reactions && model.reactions.length > 0) {
     output += 'begin reactions\n';

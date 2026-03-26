@@ -46,6 +46,10 @@ export { requiresCompartmentResolution, resolveCompartmentVolumes } from './serv
 export { BNGXMLWriter } from './services/simulation/BNGXMLWriter';
 export { parseGdat } from './services/simulation/GdatParser';
 export { CVODESolver, Rosenbrock23Solver, RK45Solver, AutoSolver, FastRK4Solver, SmartAutoSolver, CVODEAutoSolver, createSolver } from './services/simulation/ODESolver';
+export { PLASimulator, simulatePLA } from './services/simulation/PLASimulator';
+export type { PLAOptions } from './services/simulation/PLASimulator';
+export { HybridModelGenerator, generateHybridModel } from './services/simulation/HybridModelGenerator';
+export type { HybridModelOptions, HybridModelResult } from './services/simulation/HybridModelGenerator';
 export { analyzeModelStiffness, getOptimalCVODEConfig, detectModelPreset } from './services/simulation/cvodeStiffConfig';
 
 // ── NFsim ──────────────────────────────────────────────────────────

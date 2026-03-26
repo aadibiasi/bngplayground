@@ -28,6 +28,48 @@ export class SeededRandom {
   /**
    * Helper for choosing a value from a collection based on weights
    */
+
+  /**
+   * Alias for next() - returns pseudo-random float in [0, 1).
+   */
+  random(): number {
+    return this.next();
+  }
+
+  /**
+   * Poisson random variate.
+   * Knuth algorithm for lambda <= 30; normal approximation for lambda > 30.
+   *
+   * Reference: Knuth, TAOCP Vol 2, Section 3.4.1
+   */
+  poisson(lambda: number): number {
+    if (lambda <= 0) return 0;
+    if (lambda > 30) {
+      // Normal approximation: Poisson(lambda) ≈ N(lambda, lambda)
+      const u1 = this.next();
+      const u2 = this.next();
+      const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      return Math.max(0, Math.round(lambda + Math.sqrt(lambda) * z));
+    }
+    const L = Math.exp(-lambda);
+    let k = 0;
+    let p = 1;
+    do {
+      k++;
+      p *= this.next();
+    } while (p > L);
+    return k - 1;
+  }
+
+  /**
+   * Exponential random variate with rate parameter.
+   * Returns -ln(U) / rate where U ~ Uniform(0,1).
+   */
+  exponential(rate: number): number {
+    if (rate <= 0) return Infinity;
+    return -Math.log(this.next()) / rate;
+  }
+
   pickIndex(weights: Float64Array | number[], totalWeight: number): number {
     const r = this.next() * totalWeight;
     let sum = 0;

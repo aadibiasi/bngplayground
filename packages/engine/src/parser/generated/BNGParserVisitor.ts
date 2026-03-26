@@ -58,11 +58,14 @@ import { Energy_patterns_blockContext } from "./BNGParser";
 import { Energy_pattern_defContext } from "./BNGParser";
 import { Population_maps_blockContext } from "./BNGParser";
 import { Population_map_defContext } from "./BNGParser";
+import { Population_types_blockContext } from "./BNGParser";
+import { Population_type_defContext } from "./BNGParser";
 import { Actions_blockContext } from "./BNGParser";
 import { Wrapped_actions_blockContext } from "./BNGParser";
 import { Begin_actions_blockContext } from "./BNGParser";
 import { Action_commandContext } from "./BNGParser";
 import { Generate_network_cmdContext } from "./BNGParser";
+import { Generate_hybrid_model_cmdContext } from "./BNGParser";
 import { Simulate_cmdContext } from "./BNGParser";
 import { Write_cmdContext } from "./BNGParser";
 import { Set_cmdContext } from "./BNGParser";
@@ -486,6 +489,20 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	visitPopulation_map_def?: (ctx: Population_map_defContext) => Result;
 
 	/**
+	 * Visit a parse tree produced by `BNGParser.population_types_block`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitPopulation_types_block?: (ctx: Population_types_blockContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `BNGParser.population_type_def`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitPopulation_type_def?: (ctx: Population_type_defContext) => Result;
+
+	/**
 	 * Visit a parse tree produced by `BNGParser.actions_block`.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -519,6 +536,13 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitGenerate_network_cmd?: (ctx: Generate_network_cmdContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `BNGParser.generate_hybrid_model_cmd`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitGenerate_hybrid_model_cmd?: (ctx: Generate_hybrid_model_cmdContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by `BNGParser.simulate_cmd`.

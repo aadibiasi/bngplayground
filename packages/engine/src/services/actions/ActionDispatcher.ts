@@ -211,8 +211,7 @@ export class ActionDispatcher {
     const prefix = args.prefix || this.context.outputPrefix || this.context.model.name || 'model';
     const filename = `${prefix}.xml`;
 
-    const writer = new SBMLWriter(this.context.model);
-    const content = writer.write();
+    const content = SBMLWriter.write(this.context.model);
 
     if (!this.context.writeFile) {
       console.log('[ActionDispatcher] writeSBML: no file writer callback, printing to console');

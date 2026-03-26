@@ -22,7 +22,7 @@ export interface ExpandedNetwork {
  */
 export interface SimulationEngine {
   readonly name: string;
-  readonly method: 'ode' | 'ssa' | 'nf';
+  readonly method: 'ode' | 'ssa' | 'nf' | 'pla';
 
   /** Can this engine handle the given model + options? */
   canHandle(model: BNGLModel, options: SimulationOptions): boolean;
@@ -49,9 +49,10 @@ export class EngineRegistry {
 
   resolve(model: BNGLModel, options: SimulationOptions): SimulationEngine | null {
     const raw = options.method;
-    const method: 'ode' | 'ssa' | 'nf' | null =
+    const method: 'ode' | 'ssa' | 'nf' | 'pla' | null =
       raw === 'default' ? null :
       raw === 'nfsim'   ? 'nf' :
+      raw === 'pla'     ? 'pla' :
       raw;
 
     // Explicit method request

@@ -196,6 +196,7 @@ export async function simulate(
   const rng = new SeededRandom(options.seed ?? 12345);
 
   const allSsa = phases.every(p => p.method === 'ssa') || options.method === 'ssa';
+  const allPla = phases.every(p => p.method === 'pla') || options.method === 'pla';
 
   // -------------------------------------------------------------------------
   // 2. Prepare Reactions (Optimization & Parity)
@@ -544,7 +545,7 @@ export async function simulate(
     }
   };
 
-  const isOde = !allSsa && options.method !== 'ssa';
+  const isOde = !allSsa && !allPla && options.method !== 'ssa' && options.method !== 'pla';
   const state = new Float64Array(numSpecies);
   model.species.forEach((s, i) => {
     // PARITY FIX: Species amount in BNGL is usually a count (integer).
@@ -850,6 +851,22 @@ export async function simulate(
       return parametersUpdated;
     };
 
+
+    if (allPla) {
+      // PLA is fully stochastic hybrid model generator
+      const { simulatePLA } = await import('./PLASimulator');
+      // Update model with the correctly resolved species counts
+      const plaModel = {
+        ...model,
+        species: model.species.map((s, i) => ({ ...s, initialConcentration: state[i] }))
+      };
+      const result = await simulatePLA(plaModel, options);
+      if (includeSpeciesData) {
+         // PLA simulator doesn't return full species matrices by default, 
+         // but that's fine for BNGL action parity since observables are what's plotted.
+      }
+      return result;
+    }
 
     if (allSsa) {
       if (functionalRateCount > 0) {
@@ -2456,14 +2473,15 @@ export async function simulate(
           // Check stop_if condition (BNG2 parity)
           if (phase.stop_if) {
             try {
-              // Build context with current observable values
-              const stopContext: Record<string, number> = { ...currentParams, time: t };
-              for (let k = 0; k < observables.length; k++) {
-                stopContext[observables[k].name] = observableValues[k];
-              }
               // Evaluate the stop_if expression
-              const stopResult = evaluateExpressionOrParse(phase.stop_if, stopContext);
-              if (stopResult) {
+              const currentObsValues = evaluateObservablesFast(y);
+              const stopResult = evaluateFunctionalRate(
+                phase.stop_if,
+                model.parameters || {},
+                { ...currentObsValues, time: t },
+                model.functions
+              );
+              if (stopResult !== 0) {
                 console.log(`[Worker] Phase ${phaseIdx + 1}: stop_if condition met at step ${i}, t=${toBngGridTime(phaseStart, phaseDuration, phase_n_steps, i)}: ${phase.stop_if}`);
                 shouldStop = true;
                 break;

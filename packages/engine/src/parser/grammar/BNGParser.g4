@@ -11,7 +11,7 @@ options {
 
 // Entry point - support both "begin actions...end actions" and loose action commands after model
 prog
-    : LB* header_block* ((BEGIN MODEL LB+ program_block* END MODEL LB*) | program_block*) (wrapped_actions_block | actions_block)? EOF
+    : LB* (header_block | action_command)* ((BEGIN MODEL LB+ program_block* END MODEL LB*) | program_block*) (wrapped_actions_block | actions_block)? EOF
     ;
 
 header_block
@@ -49,8 +49,10 @@ program_block
     | compartments_block
     | energy_patterns_block
     | population_maps_block
+    | population_types_block
     | wrapped_actions_block
     | begin_actions_block  // NEW: Support "begin actions ... end actions"
+    | action_command       // LEGACY: Support loose action commands in model body
     ;
 
 // Parameters block
@@ -315,6 +317,16 @@ population_map_def
     : (STRING COLON)? species_def UNI_REACTION_SIGN STRING LPAREN param_list? RPAREN
     ;
 
+// Population types block
+population_types_block
+    : BEGIN POPULATION TYPES LB+ (population_type_def LB+)* END POPULATION TYPES LB*
+    ;
+
+population_type_def
+    : molecule_def STRING?
+    ;
+
+
 
 
 // Actions block (unwrapped - for loose commands)
@@ -334,6 +346,7 @@ begin_actions_block
 
 action_command
     : generate_network_cmd
+    | generate_hybrid_model_cmd
     | simulate_cmd
     | write_cmd
     | set_cmd
@@ -342,6 +355,10 @@ action_command
 
 generate_network_cmd
     : GENERATENETWORK LPAREN action_args? RPAREN SEMI? LB*
+    ;
+
+generate_hybrid_model_cmd
+    : GENERATEHYBRIDMODEL LPAREN action_args? RPAREN SEMI? LB*
     ;
 
 simulate_cmd
