@@ -9,7 +9,7 @@ import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { LoadingSpinner } from './ui/LoadingSpinner';
 import { bnglService } from '../services/bnglService';
-import { CHART_COLORS } from '../chartColors';
+import { CHART_COLORS } from '../src/utils/chartColors';
 import { TimeSeriesChart, TimeSeriesSeries } from './charts/TimeSeriesChart';
 
 interface ComparisonPanelProps {

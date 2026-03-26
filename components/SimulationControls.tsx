@@ -12,15 +12,15 @@ interface SimulationControlsProps {
   onRun: (options: SimulationOptions) => void;
   isSimulating: boolean;
   modelExists: boolean;
-  defaultMethod?: 'ode' | 'ssa' | 'nf' | 'default';
-  simulationMethod?: 'ode' | 'ssa' | 'nf' | 'default';
-  onMethodChange?: (method: 'ode' | 'ssa' | 'nf' | 'default') => void;
+  defaultMethod?: 'ode' | 'ssa' | 'pla' | 'nf' | 'default';
+  simulationMethod?: 'ode' | 'ssa' | 'pla' | 'nf' | 'default';
+  onMethodChange?: (method: 'ode' | 'ssa' | 'pla' | 'nf' | 'default') => void;
   model?: any; // BNGLModel - to extract simulation phases
 }
 
 export function resolveSimulationControlDefaults(
   model: any,
-  method: 'default' | 'ode' | 'ssa' | 'nf'
+  method: 'default' | 'ode' | 'ssa' | 'pla' | 'nf'
 ): { tStart: string; tEnd: string; nSteps: string } {
   const fallbackOptions = model ? getSimulationOptionsFromParsedModel(model, method) : { t_end: 100, n_steps: 100 };
   const firstPhase = model?.simulationPhases?.[0];
@@ -61,10 +61,10 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
 }) => {
   const [showOptions, setShowOptions] = useState(false);
   // Local state if not controlled
-  const [localMethod, setLocalMethod] = useState<'default' | 'ode' | 'ssa' | 'nf'>(defaultMethod);
+  const [localMethod, setLocalMethod] = useState<'default' | 'ode' | 'ssa' | 'pla' | 'nf'>(defaultMethod);
 
   const method = initialMethod !== undefined ? initialMethod : localMethod;
-  const setMethod = (m: 'default' | 'ode' | 'ssa' | 'nf') => {
+  const setMethod = (m: 'default' | 'ode' | 'ssa' | 'pla' | 'nf') => {
     setLocalMethod(m);
     onMethodChange?.(m);
   };
@@ -183,6 +183,8 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
   // Summary text showing current config
   const configSummary = method === 'default'
     ? 'Auto'
+    : method === 'pla'
+      ? 'PLA'
     : method === 'nf'
       ? 'NFsim'
       : `${method.toUpperCase()}${method === 'ode' && solver !== 'auto' ? ` • ${solver}` : ''}`;
@@ -245,7 +247,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                 Simulation Method
               </label>
               <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-900/50 p-1 rounded-md">
-                {['default', 'ode', 'ssa', 'nf'].map(m => (
+                {['default', 'ode', 'ssa', 'pla', 'nf'].map(m => (
                   <button
                     key={m}
                     onClick={() => setMethod(m as any)}

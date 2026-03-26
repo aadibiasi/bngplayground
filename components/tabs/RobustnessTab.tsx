@@ -6,7 +6,7 @@ import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Respon
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { SettingsIcon } from '../icons/SettingsIcon';
-import { CHART_COLORS } from '../../chartColors';
+import { CHART_COLORS } from '../../src/utils/chartColors';
 import { ExternalLegend, formatTooltipNumber, formatYAxisTick } from '../charts/InteractiveLegend';
 
 interface RobustnessTabProps {

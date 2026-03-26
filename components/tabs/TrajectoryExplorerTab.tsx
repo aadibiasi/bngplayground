@@ -18,7 +18,7 @@ import {
     materializeSharedSimulationResult,
     type SharedEnsembleResultsHandle,
 } from '../../services/BnglWorkerPool';
-import { CHART_COLORS } from '../../chartColors';
+import { CHART_COLORS } from '../../src/utils/chartColors';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { TimeSeriesChart, TimeSeriesSeries } from '../charts/TimeSeriesChart';

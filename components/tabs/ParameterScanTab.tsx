@@ -8,7 +8,7 @@ import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { Card } from '../ui/Card';
 import { DataTable } from '../ui/DataTable';
 import { bnglService } from '../../services/bnglService';
-import { CHART_COLORS } from '../../chartColors';
+import { CHART_COLORS } from '../../src/utils/chartColors';
 import HeatmapChart from '../HeatmapChart';
 
 

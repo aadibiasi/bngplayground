@@ -1,4 +1,4 @@
-import { EXAMPLES } from '../constants';
+import { EXAMPLES } from '../../src/constants';
 
 interface Result {
   id: string;

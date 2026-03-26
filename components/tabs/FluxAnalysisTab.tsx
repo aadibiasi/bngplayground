@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { BNGLModel, SimulationResults } from '../../types';
 import { Card } from '../ui/Card';
 import { Select } from '../ui/Select';
-import { CHART_COLORS } from '../../chartColors';
+import { CHART_COLORS } from '../../src/utils/chartColors';
 
 interface FluxAnalysisTabProps {
   model: BNGLModel | null;

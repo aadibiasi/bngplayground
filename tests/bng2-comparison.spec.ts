@@ -16,7 +16,7 @@ import { collectBnglFiles, resolveRuleHubRoot } from './helpers/rulehub';
 const paths = resolveBNG2Paths();
 
 // Import BNG2 path defaults
-import { BNG2_PARSE_AND_ODE_VERIFIED_MODELS } from '../constants';
+import { BNG2_PARSE_AND_ODE_VERIFIED_MODELS } from '../src/constants';
 
 const thisDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(thisDir, '..');
@@ -659,13 +659,13 @@ async function runWebSimulator(
   });
 
   // Create a set of observable names to pass to evaluateExpression
-  const observableNames = new Set(model.observables.map(o => o.name));
-  const parametersMap = new Map(Object.entries(model.parameters));
+  const observableNames = new Set((model.observables || []).map(o => o.name));
+  const parametersMap = new Map(Object.entries(model.parameters || {}));
 
   // Track original rate expressions for observable-dependent rates
   const ruleRateExpressions: { forwardRate: string, reverseRate?: string }[] = [];
 
-  const rules = model.reactionRules.flatMap((r, _ruleIdx) => {
+  const rules = (model.reactionRules || []).flatMap((r, _ruleIdx) => {
     // Expand macros first
     const forwardMacro = expandRateLawMacro(r.rate, r.reactants.map((_, i) => `ridx${i}`), parametersMap);
     const hasObsInForward = forwardMacro.isFunctional || rateContainsObservables(forwardMacro.expanded, observableNames);
@@ -709,7 +709,7 @@ async function runWebSimulator(
 
   // Build a map from rule name to rate expression
   const ruleRateMap = new Map<string, string>();
-  model.reactionRules.forEach(r => {
+  (model.reactionRules || []).forEach(r => {
     const forwardName = r.reactants.join('+') + '->' + r.products.join('+');
     ruleRateMap.set(forwardName, r.rate);
     if (r.isBidirectional && r.reverseRate) {
@@ -814,13 +814,12 @@ async function runWebSimulator(
     }
 
     return {
-      reactants: new Int32Array(reactantIndices as number[]) as unknown as Int32Array<ArrayBuffer>,
-      products: new Int32Array(productIndices as number[]) as unknown as Int32Array<ArrayBuffer>,
+      reactants: new Int32Array(reactantIndices as number[]),
+      products: new Int32Array(productIndices as number[]),
       rateConstant: r.rateConstant!,
       rateEvaluator,
       productStoichiometries: r.productStoichiometries ? new Float64Array(r.productStoichiometries) : undefined
-    };
-    // @ts-ignore
+    } as ConcreteReaction;
   }).filter((r): r is ConcreteReaction => r !== null);
 
   const concreteObservables = expandedModel.observables.map(obs => {

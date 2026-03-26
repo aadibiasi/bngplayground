@@ -1,4 +1,4 @@
-import { Example } from './types.ts';
+import { Example } from '../types.ts';
 
 // Cell Regulation & Transport
 
@@ -24,10 +24,7 @@ import { Example } from './types.ts';
 // Literature Models
 
 
-export const CHART_COLORS = [
-  '#4E79A7', '#F28E2B', '#E15759', '#76B7B2', '#59A14F',
-  '#EDC948', '#B07AA1', '#FF9DA7', '#9C755F', '#BAB0AC'
-];
+export { CHART_COLORS } from './utils/chartColors';
 
 // Set AB model as default
 export const INITIAL_BNGL_CODE = `begin model

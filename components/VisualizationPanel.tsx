@@ -38,7 +38,7 @@ interface VisualizationPanelProps {
   onSimulate: (options: SimulationOptions) => void;
   isSimulating: boolean;
   onCancelSimulation: () => void;
-  simulationMethod?: 'ode' | 'ssa' | 'nf' | 'nfsim';
+  simulationMethod?: 'ode' | 'ssa' | 'pla' | 'nf' | 'nfsim';
   activeTabIndex?: number;
   onActiveTabIndexChange?: (idx: number) => void;
   bnglCode?: string;
@@ -301,7 +301,8 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                 results={results}
                 model={model}
                 isNFsim={simulationMethod === 'nf'}
-                isSSA={simulationMethod === 'ssa'}
+                // PLA outputs stochastic count-style trajectories, so render with SSA chart semantics.
+                isSSA={simulationMethod === 'ssa' || simulationMethod === 'pla'}
                 visibleSpecies={visibleSpecies}
                 onVisibleSpeciesChange={setVisibleSpecies}
                 expressions={expressions}

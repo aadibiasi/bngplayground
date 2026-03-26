@@ -7,15 +7,27 @@ import path from 'path';
 import { promisify } from 'util';
 import { exec } from 'child_process';
 import { fileURLToPath } from 'url';
-import { parseGraphML } from './brute_force_viz';
+import { parseGraphML } from '../utils/brute_force_viz';
 import { parseBNGL } from '../../services/parseBNGL';
 import { buildAtomRuleGraph } from '../../services/visualization/arGraphBuilder';
 import { exportArGraphToGraphML } from '../../services/visualization/arGraphExporter';
 import { resolveBNG2Paths } from '../../tools/bng2-paths';
 import { findRuleHubModelPath } from '../../tools/rulehubLocal';
 
+interface GMLNode {
+  id: string;
+  label: string;
+  color: string;
+}
+
+interface GMLEdge {
+  source: string;
+  target: string;
+  color?: string;
+}
+
 function getCompatibleModels(): string[] {
-  const constantsPath = path.resolve(__dirname, '../../constants.ts');
+  const constantsPath = path.resolve(__dirname, '../../src/constants.ts');
   const content = fs.readFileSync(constantsPath, 'utf8');
   // Extract models between the Set definition start/end in constants.ts
   const match = content.match(/export const BNG2_COMPATIBLE_MODELS = new Set\(\[([\s\S]*?)\]\);/);
@@ -62,13 +74,13 @@ function compareGraphML(file1: string, file2: string) {
   console.log(`  nodes: ${g1.nodes.length} vs ${g2.nodes.length}`);
   console.log(`  edges: ${g1.edges.length} vs ${g2.edges.length}`);
 
-  const idToLabel1 = new Map(g1.nodes.map(n => [n.id, n.label]));
-  const idToLabel2 = new Map(g2.nodes.map(n => [n.id, n.label]));
+  const idToLabel1 = new Map(g1.nodes.map((n: GMLNode) => [n.id, n.label]));
+  const idToLabel2 = new Map(g2.nodes.map((n: GMLNode) => [n.id, n.label]));
 
   const labels1 = Array.from(idToLabel1.values()).sort();
   const labels2 = Array.from(idToLabel2.values()).sort();
   
-  const { onlyA: nOnly1raw, onlyB: nOnly2raw } = diffArrays(labels1, labels2);
+  const { onlyA: nOnly1raw, onlyB: nOnly2raw } = diffArrays(labels1 as string[], labels2 as string[]);
   // ignore blank labels (BNG2 often hides certain atom/rule labels)
   const isMonomer = (lab: string) => lab && !lab.includes('!') && !lab.includes('.');
   const nOnly1 = nOnly1raw.filter(l => l !== '' && !isMonomer(l));
@@ -81,8 +93,8 @@ function compareGraphML(file1: string, file2: string) {
     console.log('  ✓ All node labels match.');
   }
 
-  const ekeys1 = g1.edges.map(e => `${idToLabel1.get(e.source)}->${idToLabel1.get(e.target)} [${e.color||''}]`).sort();
-  const ekeys2 = g2.edges.map(e => `${idToLabel2.get(e.source)}->${idToLabel2.get(e.target)} [${e.color||''}]`).sort();
+  const ekeys1 = g1.edges.map((e: GMLEdge) => `${idToLabel1.get(e.source)}->${idToLabel1.get(e.target)} [${e.color||''}]`).sort();
+  const ekeys2 = g2.edges.map((e: GMLEdge) => `${idToLabel2.get(e.source)}->${idToLabel2.get(e.target)} [${e.color||''}]`).sort();
   const { onlyA: eOnly1, onlyB: eOnly2 } = diffArrays(ekeys1, ekeys2);
   if (eOnly1.length || eOnly2.length) {
     console.log('  edge differences (by label):');
@@ -149,7 +161,7 @@ async function maybeGenerateWebGraphML(file: string): Promise<string> {
   const content = fs.readFileSync(file, 'utf8');
   const result = parseBNGL(content);
   // Pass observables and functions to resolve regulatory dependencies
-  const graph = buildAtomRuleGraph(result.reactionRules, {
+  const graph = buildAtomRuleGraph(result.reactionRules || [], {
     observables: result.observables,
     functions: result.functions,
     includeRateLawDeps: false, // match BNG2.pl output when comparing

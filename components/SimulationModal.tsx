@@ -51,7 +51,8 @@ export function SimulationModal({
   // Color for simulation progress
   const progressColor = 'from-teal-400 to-teal-500';
 
-  // Determine simulation method for particle animation
+  // Determine simulation method for particle animation and display.
+  // PLA is rendered with SSA-style particle animation because both are stochastic count trajectories.
   const simulationMethod = useMemo(() => {
     if (!model || !model.simulationPhases || model.simulationPhases.length === 0) return 'ode';
     
@@ -60,8 +61,16 @@ export function SimulationModal({
     
     const phase = model.simulationPhases[0];
     if (phase.method === 'nf' || phase.method === 'nfsim') return 'nfsim';
+    if (phase.method === 'pla') return 'ssa';
     if (phase.method === 'ssa') return 'ssa';
     return 'ode';
+  }, [model]);
+
+  const simulationLabel = useMemo(() => {
+    if (!model || !model.simulationPhases || model.simulationPhases.length === 0) return null;
+    if (model.simulationPhases.length !== 1) return null;
+    const phase = model.simulationPhases[0];
+    return phase.method === 'pla' ? 'PLA (Partitioned Leaping)' : null;
   }, [model]);
 
   return (
@@ -73,13 +82,13 @@ export function SimulationModal({
           <div className="h-64 w-full mb-4 border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded overflow-hidden relative bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900">
             <ParticleAnimation type={simulationMethod as 'nfsim' | 'ode' | 'ssa' | 'multiphase'} />
             <div className="absolute bottom-2 right-2 text-xs text-slate-400 dark:text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900/80 dark:bg-slate-800/80 px-2 py-1 rounded">
-              {simulationMethod === 'nfsim' 
+              {simulationLabel ?? (simulationMethod === 'nfsim' 
                 ? 'Network-Free Stochastic' 
                 : simulationMethod === 'ssa' 
                 ? 'Gillespie SSA' 
                 : simulationMethod === 'multiphase'
                 ? 'Multi-Phase Simulation'
-                : 'ODE Integration'}
+                : 'ODE Integration')}
             </div>
           </div>
         )}

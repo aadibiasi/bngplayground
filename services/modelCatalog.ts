@@ -1,5 +1,5 @@
 import type { Example } from '@bngplayground/engine';
-import { EXAMPLES, MODEL_CATEGORIES } from '../constants';
+import { EXAMPLES, MODEL_CATEGORIES } from '../src/constants';
 import { getManifest, getManifestSync, type ManifestEntry, type ModelManifest } from './modelLoader';
 
 export interface CatalogExample extends Example {

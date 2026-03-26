@@ -4,7 +4,7 @@ import { SimulationResults } from '../../types';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Card } from '../ui/Card';
-import { CHART_COLORS } from '../../chartColors';
+import { CHART_COLORS } from '../../src/utils/chartColors';
 import {
   ExternalLegend,
   InlineLegend,
